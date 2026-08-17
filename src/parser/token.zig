@@ -228,6 +228,9 @@ pub const TokenTag = enum(u32) {
     /// it falls through to the real parse path.
     invalid = 160,
 
+    // appended, not renumbered, to keep existing numeric values stable
+    int = 161 | Mask.IsKeyword | Mask.IsIdentifierLike, // "int"
+
     pub fn precedence(self: TokenTag) u5 {
         return @intCast((@intFromEnum(self) >> Mask.PrecShift) & Mask.PrecOverlap);
     }
@@ -443,6 +446,7 @@ pub const TokenTag = enum(u32) {
             .any => "any",
             .bigint => "bigint",
             .boolean => "boolean",
+            .int => "int",
             .never => "never",
             .number => "number",
             .object => "object",

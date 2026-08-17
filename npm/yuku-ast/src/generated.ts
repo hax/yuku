@@ -182,6 +182,7 @@ ck("JSXExpressionContainer", ["expression"]);
 ck("JSXEmptyExpression", []);
 ck("JSXText", []);
 ck("JSXSpreadChild", ["expression"]);
+ck("TSIntKeyword", []);
 ck("Hashbang", []);
 
 export const CHILD_KEYS: Readonly<Record<string, readonly string[]>> = KEYS;
@@ -364,6 +365,7 @@ const TYPES = [
   "JSXEmptyExpression",
   "JSXText",
   "JSXSpreadChild",
+  "TSIntKeyword",
   "Hashbang",
 ] as const;
 

@@ -100,6 +100,16 @@ test("TS definite assignment assertions", () => {
   `);
 });
 
+test("the int type keyword round-trips as int", () => {
+  expect(gen(`let n: int = 0;\nfunction f(v: int): int {\n  return v;\n}`))
+    .toMatchInlineSnapshot(`
+      "let n: int = 0;
+      function f(v: int): int {
+        return v;
+      }"
+    `);
+});
+
 test("TS leading union and intersection operators", () => {
   expect(
     gen(

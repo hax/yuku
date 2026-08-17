@@ -2506,6 +2506,15 @@ pub const TSStringKeyword = struct {};
 /// ```
 pub const TSNumberKeyword = struct {};
 
+/// The `int` primitive type.
+///
+/// ## Example
+/// ```ts
+/// let x: int;
+/// //     ^^^ TSIntKeyword
+/// ```
+pub const TSIntKeyword = struct {};
+
 /// The `bigint` primitive type. Integer values of arbitrary precision.
 ///
 /// ## Example
@@ -4205,6 +4214,8 @@ pub const NodeData = union(enum) {
     jsx_empty_expression: JSXEmptyExpression,
     jsx_text: JSXText,
     jsx_spread_child: JSXSpreadChild,
+    // appended last: variant ordinals are serialized over ffi, never reorder
+    ts_int_keyword: TSIntKeyword,
 
     /// True when this node produces a value at runtime.
     ///
@@ -4424,6 +4435,7 @@ pub const NodeData = union(enum) {
         .ts_class_implements,
         .ts_interface_heritage,
         .ts_interface_body,
+        .ts_int_keyword,
     };
 
     const type_context_set = std.EnumSet(std.meta.Tag(NodeData)).initMany(&type_context_tags);
