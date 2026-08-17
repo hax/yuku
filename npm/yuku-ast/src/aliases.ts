@@ -140,6 +140,7 @@ export const ALIAS_GROUPS = {
     "TSBooleanKeyword",
     "TSSymbolKeyword",
     "TSObjectKeyword",
+    "TSIntKeyword",
     "TSIntrinsicKeyword",
     "TSThisType",
     "TSTypeReference",

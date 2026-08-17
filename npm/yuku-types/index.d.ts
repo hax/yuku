@@ -1122,6 +1122,10 @@ interface TSSymbolKeyword extends BaseNode {
   type: "TSSymbolKeyword";
 }
 
+interface TSIntKeyword extends BaseNode {
+  type: "TSIntKeyword";
+}
+
 interface TSObjectKeyword extends BaseNode {
   type: "TSObjectKeyword";
 }
@@ -1528,6 +1532,7 @@ type TSType =
   | TSBooleanKeyword
   | TSSymbolKeyword
   | TSObjectKeyword
+  | TSIntKeyword
   | TSIntrinsicKeyword
   | TSThisType
   | TSTypeReference
@@ -1907,6 +1912,7 @@ export type {
   TSBooleanKeyword,
   TSSymbolKeyword,
   TSObjectKeyword,
+  TSIntKeyword,
   TSIntrinsicKeyword,
   TSThisType,
   TSTypeReference,
