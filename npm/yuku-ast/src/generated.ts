@@ -105,6 +105,7 @@ ck("TSNullKeyword", []);
 ck("TSUndefinedKeyword", []);
 ck("TSStringKeyword", []);
 ck("TSNumberKeyword", []);
+ck("TSIntKeyword", []);
 ck("TSBigIntKeyword", []);
 ck("TSBooleanKeyword", []);
 ck("TSSymbolKeyword", []);
@@ -287,6 +288,7 @@ const TYPES = [
   "TSUndefinedKeyword",
   "TSStringKeyword",
   "TSNumberKeyword",
+  "TSIntKeyword",
   "TSBigIntKeyword",
   "TSBooleanKeyword",
   "TSSymbolKeyword",
