@@ -1010,19 +1010,21 @@ pub const Lexer = struct {
         return self.getKeywordType(buf[0..out]);
     }
 
+    // zig fmt packs this table greedily, three entries per row, and owns
+    // the result, so the widest rows run past 100 columns
     const keyword_list = [_]struct { []const u8, TokenTag }{
         .{ "if", .@"if" },              .{ "of", .of },                   .{ "in", .in },
         .{ "do", .do },                 .{ "as", .as },                   .{ "is", .is },
         .{ "any", .any },               .{ "for", .@"for" },              .{ "get", .get },
-        .{ "let", .let },               .{ "new", .new },                 .{ "out", .out },
-        .{ "set", .set },               .{ "try", .@"try" },              .{ "var", .@"var" },
-        .{ "case", .case },             .{ "this", .this },               .{ "else", .@"else" },
-        .{ "enum", .@"enum" },          .{ "void", .void },               .{ "with", .with },
-        .{ "null", .null_literal },     .{ "type", .type },               .{ "true", .true },
-        .{ "from", .from },             .{ "await", .await },             .{ "async", .async },
-        .{ "break", .@"break" },        .{ "const", .@"const" },          .{ "class", .class },
-        .{ "catch", .@"catch" },        .{ "defer", .@"defer" },          .{ "false", .false },
-        .{ "infer", .infer },           .{ "int", .int },                 .{ "keyof", .keyof },
+        .{ "int", .int },               .{ "let", .let },                 .{ "new", .new },
+        .{ "out", .out },               .{ "set", .set },                 .{ "try", .@"try" },
+        .{ "var", .@"var" },            .{ "case", .case },               .{ "this", .this },
+        .{ "else", .@"else" },          .{ "enum", .@"enum" },            .{ "void", .void },
+        .{ "with", .with },             .{ "null", .null_literal },       .{ "type", .type },
+        .{ "true", .true },             .{ "from", .from },               .{ "await", .await },
+        .{ "async", .async },           .{ "break", .@"break" },          .{ "const", .@"const" },
+        .{ "class", .class },           .{ "catch", .@"catch" },          .{ "defer", .@"defer" },
+        .{ "false", .false },           .{ "infer", .infer },             .{ "keyof", .keyof },
         .{ "never", .never },           .{ "super", .super },             .{ "throw", .throw },
         .{ "using", .using },           .{ "while", .@"while" },          .{ "yield", .yield },
         .{ "assert", .assert },         .{ "bigint", .bigint },           .{ "delete", .delete },
