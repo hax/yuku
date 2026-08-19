@@ -2506,6 +2506,15 @@ pub const TSStringKeyword = struct {};
 /// ```
 pub const TSNumberKeyword = struct {};
 
+/// The `int` primitive type.
+///
+/// ## Example
+/// ```ts
+/// let x: int;
+/// //     ^^^ TSIntKeyword
+/// ```
+pub const TSIntKeyword = struct {};
+
 /// The `bigint` primitive type. Integer values of arbitrary precision.
 ///
 /// ## Example
@@ -4126,6 +4135,7 @@ pub const NodeData = union(enum) {
     ts_undefined_keyword: TSUndefinedKeyword,
     ts_string_keyword: TSStringKeyword,
     ts_number_keyword: TSNumberKeyword,
+    ts_int_keyword: TSIntKeyword,
     ts_bigint_keyword: TSBigIntKeyword,
     ts_boolean_keyword: TSBooleanKeyword,
     ts_symbol_keyword: TSSymbolKeyword,

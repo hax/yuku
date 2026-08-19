@@ -210,23 +210,24 @@ pub const TokenTag = enum(u32) {
     any = 147 | Mask.IsKeyword | Mask.IsIdentifierLike, // "any"
     bigint = 148 | Mask.IsKeyword | Mask.IsIdentifierLike, // "bigint"
     boolean = 149 | Mask.IsKeyword | Mask.IsIdentifierLike, // "boolean"
-    never = 150 | Mask.IsKeyword | Mask.IsIdentifierLike, // "never"
-    number = 151 | Mask.IsKeyword | Mask.IsIdentifierLike, // "number"
-    object = 152 | Mask.IsKeyword | Mask.IsIdentifierLike, // "object"
-    string = 153 | Mask.IsKeyword | Mask.IsIdentifierLike, // "string"
-    symbol = 154 | Mask.IsKeyword | Mask.IsIdentifierLike, // "symbol"
-    undefined = 155 | Mask.IsKeyword | Mask.IsIdentifierLike, // "undefined"
-    unknown = 156 | Mask.IsKeyword | Mask.IsIdentifierLike, // "unknown"
+    int = 150 | Mask.IsKeyword | Mask.IsIdentifierLike, // "int"
+    never = 151 | Mask.IsKeyword | Mask.IsIdentifierLike, // "never"
+    number = 152 | Mask.IsKeyword | Mask.IsIdentifierLike, // "number"
+    object = 153 | Mask.IsKeyword | Mask.IsIdentifierLike, // "object"
+    string = 154 | Mask.IsKeyword | Mask.IsIdentifierLike, // "string"
+    symbol = 155 | Mask.IsKeyword | Mask.IsIdentifierLike, // "symbol"
+    undefined = 156 | Mask.IsKeyword | Mask.IsIdentifierLike, // "undefined"
+    unknown = 157 | Mask.IsKeyword | Mask.IsIdentifierLike, // "unknown"
 
     // jsx
-    jsx_identifier = 157,
-    jsx_text = 158,
+    jsx_identifier = 158,
+    jsx_text = 159,
 
-    eof = 159, // end of file
+    eof = 160, // end of file
     /// input the lexer could not turn into a token. produced only by
     /// lookahead, and matches no production, so a disambiguation that sees
     /// it falls through to the real parse path.
-    invalid = 160,
+    invalid = 161,
 
     pub fn precedence(self: TokenTag) u5 {
         return @intCast((@intFromEnum(self) >> Mask.PrecShift) & Mask.PrecOverlap);
@@ -443,6 +444,7 @@ pub const TokenTag = enum(u32) {
             .any => "any",
             .bigint => "bigint",
             .boolean => "boolean",
+            .int => "int",
             .never => "never",
             .number => "number",
             .object => "object",
