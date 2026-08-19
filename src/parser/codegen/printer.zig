@@ -2847,6 +2847,7 @@ fn fixedString(comptime tag: NodeTag) ?[]const u8 {
         .ts_undefined_keyword => "undefined",
         .ts_string_keyword => "string",
         .ts_number_keyword => "number",
+        .ts_int_keyword => "int",
         .ts_bigint_keyword => "bigint",
         .ts_boolean_keyword => "boolean",
         .ts_symbol_keyword => "symbol",

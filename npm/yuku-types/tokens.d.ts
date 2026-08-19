@@ -151,15 +151,16 @@ export interface TokenKindMap {
   readonly Any: 2359443;
   readonly Bigint: 2359444;
   readonly Boolean: 2359445;
-  readonly Never: 2359446;
-  readonly Number: 2359447;
-  readonly Object: 2359448;
-  readonly String: 2359449;
-  readonly Symbol: 2359450;
-  readonly Undefined: 2359451;
-  readonly Unknown: 2359452;
-  readonly JSXIdentifier: 157;
-  readonly JSXText: 158;
-  readonly EOF: 159;
-  readonly Invalid: 160;
+  readonly Int: 2359446;
+  readonly Never: 2359447;
+  readonly Number: 2359448;
+  readonly Object: 2359449;
+  readonly String: 2359450;
+  readonly Symbol: 2359451;
+  readonly Undefined: 2359452;
+  readonly Unknown: 2359453;
+  readonly JSXIdentifier: 158;
+  readonly JSXText: 159;
+  readonly EOF: 160;
+  readonly Invalid: 161;
 }

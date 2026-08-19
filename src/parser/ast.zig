@@ -1586,6 +1586,9 @@ pub const TSStringKeyword = struct {};
 /// The `number` type.
 pub const TSNumberKeyword = struct {};
 
+/// The `int` type.
+pub const TSIntKeyword = struct {};
+
 /// The `bigint` type.
 pub const TSBigIntKeyword = struct {};
 
@@ -2340,6 +2343,7 @@ pub const NodeData = union(enum) {
     ts_undefined_keyword: TSUndefinedKeyword,
     ts_string_keyword: TSStringKeyword,
     ts_number_keyword: TSNumberKeyword,
+    ts_int_keyword: TSIntKeyword,
     ts_bigint_keyword: TSBigIntKeyword,
     ts_boolean_keyword: TSBooleanKeyword,
     ts_symbol_keyword: TSSymbolKeyword,
