@@ -4135,6 +4135,7 @@ pub const NodeData = union(enum) {
     ts_undefined_keyword: TSUndefinedKeyword,
     ts_string_keyword: TSStringKeyword,
     ts_number_keyword: TSNumberKeyword,
+    ts_int_keyword: TSIntKeyword,
     ts_bigint_keyword: TSBigIntKeyword,
     ts_boolean_keyword: TSBooleanKeyword,
     ts_symbol_keyword: TSSymbolKeyword,
@@ -4214,8 +4215,6 @@ pub const NodeData = union(enum) {
     jsx_empty_expression: JSXEmptyExpression,
     jsx_text: JSXText,
     jsx_spread_child: JSXSpreadChild,
-    // appended last: variant ordinals are serialized over ffi, never reorder
-    ts_int_keyword: TSIntKeyword,
 
     /// True when this node produces a value at runtime.
     ///
@@ -4435,7 +4434,6 @@ pub const NodeData = union(enum) {
         .ts_class_implements,
         .ts_interface_heritage,
         .ts_interface_body,
-        .ts_int_keyword,
     };
 
     const type_context_set = std.EnumSet(std.meta.Tag(NodeData)).initMany(&type_context_tags);

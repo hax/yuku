@@ -1110,6 +1110,10 @@ interface TSNumberKeyword extends BaseNode {
   type: "TSNumberKeyword";
 }
 
+interface TSIntKeyword extends BaseNode {
+  type: "TSIntKeyword";
+}
+
 interface TSBigIntKeyword extends BaseNode {
   type: "TSBigIntKeyword";
 }
@@ -1120,10 +1124,6 @@ interface TSBooleanKeyword extends BaseNode {
 
 interface TSSymbolKeyword extends BaseNode {
   type: "TSSymbolKeyword";
-}
-
-interface TSIntKeyword extends BaseNode {
-  type: "TSIntKeyword";
 }
 
 interface TSObjectKeyword extends BaseNode {
@@ -1528,11 +1528,11 @@ type TSType =
   | TSUndefinedKeyword
   | TSStringKeyword
   | TSNumberKeyword
+  | TSIntKeyword
   | TSBigIntKeyword
   | TSBooleanKeyword
   | TSSymbolKeyword
   | TSObjectKeyword
-  | TSIntKeyword
   | TSIntrinsicKeyword
   | TSThisType
   | TSTypeReference
@@ -1908,11 +1908,11 @@ export type {
   TSUndefinedKeyword,
   TSStringKeyword,
   TSNumberKeyword,
+  TSIntKeyword,
   TSBigIntKeyword,
   TSBooleanKeyword,
   TSSymbolKeyword,
   TSObjectKeyword,
-  TSIntKeyword,
   TSIntrinsicKeyword,
   TSThisType,
   TSTypeReference,
