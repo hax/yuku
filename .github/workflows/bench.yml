@@ -22,10 +22,11 @@ jobs:
         with:
           fetch-depth: "0"
 
-      - name: Fetch upstream main
+      - name: Fetch upstream main and the perf branch
         run: |
           git remote add upstream https://github.com/yuku-toolchain/yuku.git
           git fetch upstream main --depth=1
+          git fetch origin perf/lexer-fast-scan --depth=$((5 + 1))
 
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
@@ -52,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p bins
-          commits="upstream/main $(git rev-list --reverse upstream/main..HEAD)"
+          commits="upstream/main $(git rev-list --reverse upstream/main..origin/perf/lexer-fast-scan)"
           echo "commits: $commits"
           i=0
           for c in $commits; do
@@ -76,13 +77,19 @@ jobs:
           ROUNDS="${{ github.event.inputs.rounds || '25' }}"
           FILES=(bench-files/files/typescript.js bench-files/files/checker.ts bench-files/files/lib.dom.d.ts bench-files/files/react.js)
           : > bench-raw.txt
+          ls -la bins/
+          nproc
           for r in $(seq 1 "$ROUNDS"); do
             for c in bins/C*; do
               name=$(basename "$c")
               echo "# $name parse" >> bench-raw.txt
               # pin to one vCPU (away from core 0) to reduce scheduler noise;
               # min-of-rounds statistics absorb the rest
-              taskset -c 1 "$c" parse "${FILES[@]}" 2>> bench-raw.txt
+              if ! taskset -c 1 "$c" parse "${FILES[@]}" 2>> bench-raw.txt; then
+                echo "== $name failed; tail of bench-raw.txt =="
+                tail -5 bench-raw.txt
+                exit 1
+              fi
             done
           done
 
