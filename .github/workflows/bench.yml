@@ -49,7 +49,11 @@ jobs:
       - name: Fetch benchmark files
         run: |
           git clone --depth=1 https://github.com/yuku-toolchain/parser-benchmark-files.git bench-files
-          ls bench-files/
+          # lib.dom.d.ts is not in the official set; take it from the
+          # typescript package (comment-heavy workload)
+          curl -fsSL --retry 3 -o bench-files/lib.dom.d.ts \
+            https://unpkg.com/typescript@6.0.3/lib/lib.dom.d.ts
+          ls -la bench-files/
 
       - name: Build one binary per commit
         run: |
