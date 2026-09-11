@@ -1,6 +1,8 @@
 name: bench
 
 on:
+  push:
+    branches: [perf/ci-bench]
   workflow_dispatch:
     inputs:
       rounds:
