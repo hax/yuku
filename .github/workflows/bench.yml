@@ -1,0 +1,95 @@
+name: bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "alternating rounds per binary"
+        default: "25"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
+
+      - name: Fetch upstream main
+        run: |
+          git remote add upstream https://github.com/yuku-toolchain/yuku.git
+          git fetch upstream main --depth=1
+
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: "0.16.0"
+
+      - name: Cache zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig
+            .zig-cache
+          key: zig-0.16.0-bench
+
+      - name: Runner info
+        run: |
+          echo "== cpu =="; nproc; grep -m1 'model name' /proc/cpuinfo || true
+          echo "== flags =="; grep -m1 flags /proc/cpuinfo | tr ' ' '\n' | grep -E '^(avx2|avx512f|sse4_2)$' || true
+          echo "== mem =="; free -h | head -2
+
+      - name: Fetch benchmark files
+        run: git clone --depth=1 https://github.com/yuku-toolchain/ecmascript-parser-benchmark-native.git bench-files
+
+      - name: Build one binary per commit
+        run: |
+          set -euo pipefail
+          mkdir -p bins
+          commits="upstream/main $(git rev-list --reverse upstream/main..HEAD)"
+          echo "commits: $commits"
+          i=0
+          for c in $commits; do
+            i=$((i+1))
+            wt="/tmp/wt-$i"
+            git worktree add --detach "$wt" "$c"
+            cp tools/ci/parse_bench.zig "$wt/tools/parse_bench.zig"
+            ( cd "$wt"
+              git apply "$GITHUB_WORKSPACE/tools/ci/wiring.patch"
+              zig build bench-parse -Doptimize=ReleaseFast -p .bench-out
+            )
+            cp "$wt/.bench-out/bin/parse-bench" "bins/C$i"
+            echo "C$i = $(git log --format='%h %s' -n1 $c)"
+            git worktree remove --force "$wt"
+          done | tee commits.txt
+          echo "BASE=upstream/main $(git rev-parse --short upstream/main)" >> commits.txt
+
+      - name: Run alternating benchmark
+        run: |
+          set -euo pipefail
+          ROUNDS="${{ github.event.inputs.rounds || '25' }}"
+          FILES=(bench-files/files/typescript.js bench-files/files/checker.ts bench-files/files/lib.dom.d.ts bench-files/files/react.js)
+          : > bench-raw.txt
+          for r in $(seq 1 "$ROUNDS"); do
+            for c in bins/C*; do
+              name=$(basename "$c")
+              echo "# $name parse" >> bench-raw.txt
+              # pin to one vCPU (away from core 0) to reduce scheduler noise;
+              # min-of-rounds statistics absorb the rest
+              taskset -c 1 "$c" parse "${FILES[@]}" 2>> bench-raw.txt
+            done
+          done
+
+      - name: Summarize
+        run: bun tools/ci/summarize.ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: |
+            bench-raw.txt
+            commits.txt

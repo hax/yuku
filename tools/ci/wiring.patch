@@ -1,0 +1,49 @@
+diff --git a/build.zig b/build.zig
+index 8103151f..6e235c6f 100644
+--- a/build.zig
++++ b/build.zig
+@@ -127,6 +127,32 @@ pub fn build(b: *std.Build) void {
+     const fuzz_step = b.step("fuzz", "Fuzz the JS/TS parser for crashes and memory bugs");
+     fuzz_step.dependOn(&run_fuzz.step);
+ 
++    // local dev harness: full-parse benchmark + identity digests; not
++    // part of the library test surface
++    const bench_util = b.createModule(.{
++        .root_source_file = b.path("src/util/root.zig"),
++        .target = target,
++        .optimize = optimize,
++    });
++    const bench_parser = b.createModule(.{
++        .root_source_file = b.path("src/parser/root.zig"),
++        .target = target,
++        .optimize = optimize,
++    });
++    bench_parser.addImport("util", bench_util);
++    bench_parser.addImport("codegen_options", codegen_options.createModule());
++    bench_parser.addImport("parser_extension", parser_extension);
++    const bench_driver = b.createModule(.{
++        .root_source_file = b.path("tools/parse_bench.zig"),
++        .target = target,
++        .optimize = optimize,
++    });
++    bench_driver.addImport("parser", bench_parser);
++    const bench_exe = b.addExecutable(.{ .name = "parse-bench", .root_module = bench_driver });
++    const bench_install = b.addInstallArtifact(bench_exe, .{});
++    const bench_step = b.step("bench-parse", "Build the local parse benchmark/dump harness");
++    bench_step.dependOn(&bench_install.step);
++
+     const napi_dep = b.dependency("napi_zig", .{});
+ 
+     napi_zig.addLib(b, napi_dep, .{
+diff --git a/src/parser/root.zig b/src/parser/root.zig
+index 3ed2f621..8c135d58 100644
+--- a/src/parser/root.zig
++++ b/src/parser/root.zig
+@@ -6,6 +6,7 @@ pub const Options = parser.Options;
+ pub const CommentMode = parser.CommentMode;
+ 
+ pub const ast = @import("ast.zig");
++pub const lexer = @import("lexer.zig");
+ 
+ pub const extension = @import("extension.zig");
+ 
