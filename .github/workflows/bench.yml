@@ -47,7 +47,9 @@ jobs:
           echo "== mem =="; free -h | head -2
 
       - name: Fetch benchmark files
-        run: git clone --depth=1 https://github.com/yuku-toolchain/ecmascript-parser-benchmark-native.git bench-files
+        run: |
+          git clone --depth=1 https://github.com/yuku-toolchain/parser-benchmark-files.git bench-files
+          ls bench-files/
 
       - name: Build one binary per commit
         run: |
@@ -75,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           ROUNDS="${{ github.event.inputs.rounds || '25' }}"
-          FILES=(bench-files/files/typescript.js bench-files/files/checker.ts bench-files/files/lib.dom.d.ts bench-files/files/react.js)
+          FILES=(bench-files/typescript.js bench-files/checker.ts bench-files/lib.dom.d.ts bench-files/react.js)
           : > bench-raw.txt
           ls -la bins/
           nproc
