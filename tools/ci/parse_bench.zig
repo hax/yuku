@@ -225,7 +225,7 @@ pub fn main(init: std.process.Init) !void {
             }
             const mb = @as(f64, @floatFromInt(source.len)) / 1e6;
             const secs = @as(f64, @floatFromInt(best)) / 1e9;
-            std.debug.print("{s}\tlex\t{d:.2}ms\t{d:.0}MB/s\t{d} tokens\t({d} iters)\n", .{
+            std.debug.print("{s}\tlex\t{d:.3}ms\t{d:.0}MB/s\t{d} tokens\t({d} iters)\n", .{
                 basename, secs * 1000, mb / secs, count, iters,
             });
             continue;
@@ -256,7 +256,7 @@ pub fn main(init: std.process.Init) !void {
         }
         const mb = @as(f64, @floatFromInt(source.len)) / 1e6;
         const secs = @as(f64, @floatFromInt(best)) / 1e9;
-        std.debug.print("{s}\tparse\t{d:.2}ms\t{d:.0}MB/s\t({d} iters)\n", .{
+        std.debug.print("{s}\tparse\t{d:.3}ms\t{d:.0}MB/s\t({d} iters)\n", .{
             basename, secs * 1000, mb / secs, iters,
         });
     }
