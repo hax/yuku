@@ -106,9 +106,34 @@ jobs:
       - name: Summarize
         run: bun tools/ci/summarize.ts
 
+      - name: Build wasm modules
+        run: |
+          zig build wasm
+          zig build wasm-fast -Doptimize=ReleaseFast
+          ls -la zig-out/bin/*.wasm
+
+      - name: Run alternating wasm benchmark
+        run: |
+          set -euo pipefail
+          ROUNDS="${{ github.event.inputs.rounds || '25' }}"
+          FILES=(bench-files/typescript.js bench-files/checker.ts bench-files/lib.dom.d.ts bench-files/react.js)
+          : > wasm-raw.txt
+          for r in $(seq 1 "$ROUNDS"); do
+            for m in yuku-parser.wasm yuku-parser-fast.wasm; do
+              for rt in bun node; do
+                echo "# $rt $m" >> wasm-raw.txt
+                "$rt" tools/ci/wasm_bench.mts "zig-out/bin/$m" "${FILES[@]}" >> wasm-raw.txt
+              done
+            done
+          done
+
+      - name: Summarize wasm vs native
+        run: bun tools/ci/summarize-wasm.ts
+
       - uses: actions/upload-artifact@v4
         with:
           name: bench-results
           path: |
             bench-raw.txt
+            wasm-raw.txt
             commits.txt

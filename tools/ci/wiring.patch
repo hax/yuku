@@ -1,5 +1,5 @@
 diff --git a/build.zig b/build.zig
-index 8103151f..6e235c6f 100644
+index 8103151f..76d7ab83 100644
 --- a/build.zig
 +++ b/build.zig
 @@ -127,6 +127,32 @@ pub fn build(b: *std.Build) void {
@@ -35,6 +35,37 @@ index 8103151f..6e235c6f 100644
      const napi_dep = b.dependency("napi_zig", .{});
  
      napi_zig.addLib(b, napi_dep, .{
+@@ -193,6 +219,30 @@ pub fn build(b: *std.Build) void {
+             .simd128,
+         }),
+     });
++    // local dev harness: the official wasm step hardcodes ReleaseSmall;
++    // this variant takes -Doptimize to build a ReleaseFast module
++    const wasm_fast_step = b.step("wasm-fast", "Build the parser WebAssembly module at -Doptimize");
++    {
++        const wf_transfer_module = b.createModule(.{
++            .root_source_file = b.path("src/parser/ffi/transfer/root.zig"),
++            .target = wasm_target,
++            .optimize = optimize,
++        });
++        wf_transfer_module.addImport("parser", parser_module);
++        const wf_module = b.createModule(.{
++            .root_source_file = b.path("src/parser/ffi/wasm/parser.zig"),
++            .target = wasm_target,
++            .optimize = optimize,
++            .strip = true,
++        });
++        wf_module.addImport("parser", parser_module);
++        wf_module.addImport("transfer", wf_transfer_module);
++        const wf = b.addExecutable(.{ .name = "yuku-parser-fast", .root_module = wf_module });
++        wf.entry = .disabled;
++        wf.rdynamic = true;
++        wasm_fast_step.dependOn(&b.addInstallArtifact(wf, .{}).step);
++    }
++
+     const wasm_step = b.step("wasm", "Build the WebAssembly modules");
+ 
+     const wasm_transfer_module = b.createModule(.{
 diff --git a/src/parser/root.zig b/src/parser/root.zig
 index 3ed2f621..8c135d58 100644
 --- a/src/parser/root.zig
