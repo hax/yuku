@@ -74,9 +74,9 @@ jobs:
             ( cd "$wt"
               git apply "$GITHUB_WORKSPACE/tools/ci/wiring.patch"
               zig build bench-parse -Doptimize=ReleaseFast -p .bench-out
+              zig build wasm-fast -Doptimize=ReleaseFast -p .bench-out
             )
             cp "$wt/.bench-out/bin/parse-bench" "bins/C$i"
-            zig build wasm-fast -Doptimize=ReleaseFast -p .bench-out
             cp "$wt/.bench-out/bin/yuku-parser-fast.wasm" "wasm-bins/C$i.wasm"
             echo "C$i = $(git log --format='%h %s' -n1 $c)"
             git worktree remove --force "$wt"
