@@ -127,6 +127,32 @@ pub fn build(b: *std.Build) void {
     const fuzz_step = b.step("fuzz", "Fuzz the JS/TS parser for crashes and memory bugs");
     fuzz_step.dependOn(&run_fuzz.step);
 
+    // local dev harness: full-parse benchmark + identity digests; not
+    // part of the library test surface
+    const bench_util = b.createModule(.{
+        .root_source_file = b.path("src/util/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const bench_parser = b.createModule(.{
+        .root_source_file = b.path("src/parser/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    bench_parser.addImport("util", bench_util);
+    bench_parser.addImport("codegen_options", codegen_options.createModule());
+    bench_parser.addImport("parser_extension", parser_extension);
+    const bench_driver = b.createModule(.{
+        .root_source_file = b.path("tools/parse_bench.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    bench_driver.addImport("parser", bench_parser);
+    const bench_exe = b.addExecutable(.{ .name = "parse-bench", .root_module = bench_driver });
+    const bench_install = b.addInstallArtifact(bench_exe, .{});
+    const bench_step = b.step("bench-parse", "Build the local parse benchmark/dump harness");
+    bench_step.dependOn(&bench_install.step);
+
     const napi_dep = b.dependency("napi_zig", .{});
 
     napi_zig.addLib(b, napi_dep, .{
@@ -193,6 +219,30 @@ pub fn build(b: *std.Build) void {
             .simd128,
         }),
     });
+    // local dev harness: the official wasm step hardcodes ReleaseSmall;
+    // this variant takes -Doptimize to build a ReleaseFast module
+    const wasm_fast_step = b.step("wasm-fast", "Build the parser WebAssembly module at -Doptimize");
+    {
+        const wf_transfer_module = b.createModule(.{
+            .root_source_file = b.path("src/parser/ffi/transfer/root.zig"),
+            .target = wasm_target,
+            .optimize = optimize,
+        });
+        wf_transfer_module.addImport("parser", parser_module);
+        const wf_module = b.createModule(.{
+            .root_source_file = b.path("src/parser/ffi/wasm/parser.zig"),
+            .target = wasm_target,
+            .optimize = optimize,
+            .strip = true,
+        });
+        wf_module.addImport("parser", parser_module);
+        wf_module.addImport("transfer", wf_transfer_module);
+        const wf = b.addExecutable(.{ .name = "yuku-parser-fast", .root_module = wf_module });
+        wf.entry = .disabled;
+        wf.rdynamic = true;
+        wasm_fast_step.dependOn(&b.addInstallArtifact(wf, .{}).step);
+    }
+
     const wasm_step = b.step("wasm", "Build the WebAssembly modules");
 
     const wasm_transfer_module = b.createModule(.{

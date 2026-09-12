@@ -62,7 +62,7 @@ jobs:
       - name: Build one binary per commit
         run: |
           set -euo pipefail
-          mkdir -p bins
+          mkdir -p bins wasm-bins
           commits="upstream/main $(git rev-list --reverse upstream/main..origin/perf/lexer-fast-scan)"
           echo "commits: $commits"
           i=0
@@ -76,6 +76,8 @@ jobs:
               zig build bench-parse -Doptimize=ReleaseFast -p .bench-out
             )
             cp "$wt/.bench-out/bin/parse-bench" "bins/C$i"
+            zig build wasm-fast -Doptimize=ReleaseFast -p .bench-out
+            cp "$wt/.bench-out/bin/yuku-parser-fast.wasm" "wasm-bins/C$i.wasm"
             echo "C$i = $(git log --format='%h %s' -n1 $c)"
             git worktree remove --force "$wt"
           done | tee commits.txt
@@ -106,13 +108,6 @@ jobs:
       - name: Summarize
         run: bun tools/ci/summarize.ts
 
-      - name: Build wasm modules
-        run: |
-          git apply tools/ci/wiring.patch
-          zig build wasm
-          zig build wasm-fast -Doptimize=ReleaseFast
-          ls -la zig-out/bin/*.wasm
-
       - name: Run alternating wasm benchmark
         run: |
           set -euo pipefail
@@ -120,10 +115,11 @@ jobs:
           FILES=(bench-files/typescript.js bench-files/checker.ts bench-files/lib.dom.d.ts bench-files/react.js)
           : > wasm-raw.txt
           for r in $(seq 1 "$ROUNDS"); do
-            for m in yuku-parser.wasm yuku-parser-fast.wasm; do
+            for w in wasm-bins/C*.wasm; do
+              name=$(basename "$w" .wasm)
               for rt in bun node; do
-                echo "# $rt $m" >> wasm-raw.txt
-                "$rt" tools/ci/wasm_bench.mts "zig-out/bin/$m" "${FILES[@]}" >> wasm-raw.txt
+                echo "# $name $rt" >> wasm-raw.txt
+                "$rt" tools/ci/wasm_bench.mts "$w" "${FILES[@]}" >> wasm-raw.txt
               done
             done
           done

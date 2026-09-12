@@ -1,61 +1,82 @@
-// Aggregate wasm-raw.txt (alternating rounds over runtime × module) and
-// the native chain results (bench-raw.txt, C6 = branch tip) into a
-// wasm/native ratio table. Run: bun tools/ci/summarize-wasm.ts
+// Aggregate per-commit wasm results (wasm-raw.txt, "# <Cn> <rt>" headers)
+// against the native chain (bench-raw.txt, "# <Cn> parse"). Prints per-
+// commit step deltas per runtime and the wasm/native ratio per commit.
+// Run: bun tools/ci/summarize-wasm.ts
 import { readFileSync } from "node:fs";
 
 const median = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)]!;
 
-// wasm samples: "# <runtime> <module>" header lines, then
-// "<file>\twasm-<runtime>\t<ms>ms\t..."
-const wasm: Record<string, number[]> = {};
-let side = "";
-for (const line of readFileSync("wasm-raw.txt", "utf8").split("\n")) {
-  const t = line.trim();
-  if (t.startsWith("#")) {
-    const parts = t.split(/\s+/);
-    side = `${parts[1]}-${parts[2]!.includes("fast") ? "fast" : "small"}`;
-    continue;
+const load = (path: string, keyOf: (side: string[], file: string) => string | null) => {
+  const out: Record<string, number[]> = {};
+  let side: string[] = [];
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const t = line.trim();
+    if (t.startsWith("#")) {
+      side = t.split(/\s+/).slice(1);
+      continue;
+    }
+    if (!t.includes("ms")) continue;
+    const p = t.split("\t");
+    const file = p[0]!.split("/").pop()!;
+    const ms = Number.parseFloat(p[2]!.replace("ms", ""));
+    const key = keyOf(side, file);
+    if (key) (out[key] ??= []).push(ms);
   }
-  if (!t.includes("ms")) continue;
-  const p = t.split("\t");
-  const file = p[0]!.split("/").pop()!;
-  const ms = Number.parseFloat(p[2]!.replace("ms", ""));
-  (wasm[`${file}\t${side}`] ??= []).push(ms);
-}
+  return out;
+};
 
-// native tip samples from the chain (C6 = last commit)
-const nat: Record<string, number[]> = {};
-for (const line of readFileSync("bench-raw.txt", "utf8").split("\n")) {
-  const t = line.trim();
-  if (t.startsWith("#")) {
-    side = t.split(/\s+/)[1]!;
-    continue;
-  }
-  if (!t.includes("ms")) continue;
-  if (side !== "C6") continue;
-  const p = t.split("\t");
-  const file = p[0]!.split("/").pop()!;
-  const ms = Number.parseFloat(p[2]!.replace("ms", ""));
-  (nat[file] ??= []).push(ms);
-}
+const wasm = load("wasm-raw.txt", (side, file) =>
+  side.length >= 2 ? `wasm-${side[1]}:${side[0]}:${file}` : null,
+);
+const nat = load("bench-raw.txt", (side, file) =>
+  side.length >= 2 && side[1] === "parse" ? `native:${side[0]}:${file}` : null,
+);
 
+const order = [...new Set(Object.keys(wasm).map(k => k.split(":")[1]!))].sort(
+  (a, b) => Number.parseInt(a.slice(1), 10) - Number.parseInt(b.slice(1), 10),
+);
 const files = ["typescript.js", "checker.ts", "lib.dom.d.ts", "react.js"];
-const variants = ["bun-small", "node-small", "bun-fast", "node-fast"];
-const pick = (f: string, v: string) => wasm[`${f}\t${v}`] ?? [Number.NaN];
+const labels = Object.fromEntries(
+  readFileSync("commits.txt", "utf8")
+    .split("\n")
+    .map(l => l.trim().match(/^(C\d+) = ([0-9a-f]+)/))
+    .filter(Boolean)
+    .map(m => [m![1]!, m![2]!]),
+);
 
-console.log(`${"\t".repeat(0)}min ms (wasm) vs native tip, and wasm/native ratios`);
-console.log(`file\t native\t${variants.join("\t")}\t ratios (${variants.join("/")})`);
-for (const f of files) {
-  const n = Math.min(...(nat[f] ?? [Number.NaN]));
-  const vals = variants.map(v => Math.min(...pick(f, v)));
-  const ratios = vals.map(x => (x / n).toFixed(2));
-  console.log(
-    `${f}\t${n.toFixed(2)}\t${vals.map(x => x.toFixed(2)).join("\t")}\t${ratios.join("/")}`,
-  );
+for (const [stat, fn] of [
+  ["MIN", (v: number[]) => Math.min(...v)] as const,
+  ["MEDIAN", median] as const,
+]) {
+  console.log(`=== wasm ${stat} ms (bun / node) ===`);
+  console.log(`file           ` + order.map(s => s.padStart(19)).join(""));
+  for (const f of files) {
+    const cells = order.map(s => {
+      const b = fn(wasm[`wasm-bun:${s}:${f}`] ?? [Number.NaN]);
+      const n = fn(wasm[`wasm-node:${s}:${f}`] ?? [Number.NaN]);
+      return `${b.toFixed(2)}/${n.toFixed(2)}`.padStart(19);
+    });
+    console.log(f.padEnd(15) + cells.join(""));
+  }
+  console.log(`step delta bun ` + order.slice(1).map(s => s.padStart(17)).join(""));
+  for (const f of files) {
+    const cells = order.slice(1).map((s, i) => {
+      const a = fn(wasm[`wasm-bun:${order[i]}:${f}`] ?? [Number.NaN]);
+      const b = fn(wasm[`wasm-bun:${s}:${f}`] ?? [Number.NaN]);
+      const d = (100 * (a - b)) / a;
+      return `${d >= 0 ? "+" : ""}${d.toFixed(1)}%`.padStart(17);
+    });
+    console.log(f.padEnd(15) + "  " + cells.join(""));
+  }
+  console.log(`wasm/native bun` + order.map(s => s.padStart(15)).join(""));
+  for (const f of files) {
+    const cells = order.map(s => {
+      const w = fn(wasm[`wasm-bun:${s}:${f}`] ?? [Number.NaN]);
+      const n = fn(nat[`native:${s}:${f}`] ?? [Number.NaN]);
+      return `${(w / n).toFixed(2)}x`.padStart(15);
+    });
+    console.log(f.padEnd(15) + " " + cells.join(""));
+  }
+  console.log("");
 }
-console.log("\nmedian check:");
-for (const f of files) {
-  const n = median(nat[f] ?? [Number.NaN]);
-  const vals = variants.map(v => median(pick(f, v)));
-  console.log(`${f}\t${n.toFixed(2)}\t${vals.map(x => x.toFixed(2)).join("\t")}\t${vals.map(x => (x / n).toFixed(2)).join("/")}`);
-}
+for (const s of order) console.log(`${s}: ${labels[s] ?? "upstream/main"}`);
