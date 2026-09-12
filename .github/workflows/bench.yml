@@ -108,6 +108,7 @@ jobs:
 
       - name: Build wasm modules
         run: |
+          git apply tools/ci/wiring.patch
           zig build wasm
           zig build wasm-fast -Doptimize=ReleaseFast
           ls -la zig-out/bin/*.wasm
