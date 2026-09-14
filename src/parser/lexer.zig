@@ -47,7 +47,7 @@ pub const LexerMode = enum {
 };
 
 /// First offset >= `from` at which `src` holds one of the comptime
-/// `chars`, searched 16 bytes at a time; `src.len` on a miss.
+/// `chars`, searched 16 bytes at a time, `src.len` on a miss.
 fn findAnyPos(comptime chars: []const u8, src: []const u8, from: u32) u32 {
     const Vec = @Vector(16, u8);
 
@@ -1461,7 +1461,7 @@ pub const Lexer = struct {
         }
         // multi-line body: vectorized search for the two-byte '*/'
         // sequence (star and slash masks combined per lane). line leads
-        // are " * " - star without a slash - so they never restart the
+        // are " * ", star without a slash, so they never restart the
         // scan. windows overlap by one byte to catch a straddling '*/'.
         var w = pos - 1;
         while (w + 16 <= src.len) {
