@@ -577,7 +577,7 @@ pub const MethodDefinitionKind = enum {
 ///
 /// `.none` means no modifier was written. This is distinct from `public`,
 /// which is written explicitly.
-pub const Accessibility = enum {
+pub const Accessibility = enum(u2) {
     none,
     public,
     private,
@@ -653,22 +653,32 @@ pub const PropertyDefinition = struct {
     computed: bool,
     /// true for the `static` modifier.
     static: bool,
-    /// true for `accessor x;` auto-accessor fields.
-    accessor: bool,
-    /// true for the `declare` modifier.
-    declare: bool = false,
-    /// true for the `override` modifier.
-    override: bool = false,
-    /// true for an optional property (`foo?: T`).
-    optional: bool = false,
-    /// true for a definite assignment assertion (`foo!: T`).
-    definite: bool = false,
-    /// true for the `readonly` modifier.
-    readonly: bool = false,
-    /// true for the `abstract` modifier.
-    abstract: bool = false,
-    /// `.none` when no accessibility modifier was written.
-    accessibility: Accessibility = .none,
+    /// Modifier flags semantic analysis never reads directly; packed into two
+    /// bytes so the payload stays at 24 bytes. `computed` and `static` are
+    /// read by the binder and checker, so they stay flat one-byte fields.
+    modifiers: Modifiers = .{},
+
+    /// Modifier flags of a property definition, packed to keep the payload
+    /// small. Field order is part of the FFI wire format: the flags pack
+    /// into the node's flag word in declaration order.
+    pub const Modifiers = packed struct {
+        /// true for `accessor x;` auto-accessor fields.
+        accessor: bool = false,
+        /// true for the `declare` modifier.
+        declare: bool = false,
+        /// true for the `override` modifier.
+        override: bool = false,
+        /// true for an optional property (`foo?: T`).
+        optional: bool = false,
+        /// true for a definite assignment assertion (`foo!: T`).
+        definite: bool = false,
+        /// true for the `readonly` modifier.
+        readonly: bool = false,
+        /// true for the `abstract` modifier.
+        abstract: bool = false,
+        /// `.none` when no accessibility modifier was written.
+        accessibility: Accessibility = .none,
+    };
 };
 
 /// A `static { ... }` block inside a class body.
@@ -4497,8 +4507,8 @@ pub const Node = struct {
 pub const NodeList = std.MultiArrayList(Node);
 
 comptime {
-    std.debug.assert(@sizeOf(NodeData) == 36);
-    std.debug.assert(@sizeOf(Node) == 44);
+    std.debug.assert(@sizeOf(NodeData) == 32);
+    std.debug.assert(@sizeOf(Node) == 40);
     std.debug.assert(@sizeOf(Class) == 40);
-    std.debug.assert(@sizeOf(PropertyDefinition) == 32);
+    std.debug.assert(@sizeOf(PropertyDefinition) == 24);
 }
