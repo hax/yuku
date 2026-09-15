@@ -107,6 +107,11 @@ fn isEncodedEnum(comptime E: type) bool {
             for (@typeInfo(T).@"struct".field_types) |Field| {
                 if (Field == E) return true;
                 if (Field == ?E) return true;
+                if (rt.isPackedFlagSet(Field)) {
+                    for (@typeInfo(Field).@"struct".field_types) |F| {
+                        if (F == E) return true;
+                    }
+                }
             }
         }
         return false;
@@ -424,6 +429,14 @@ fn writeEncoder(w: *Writer, comptime tag: []const u8, comptime index: usize) !vo
             const at = comptime rt.layout(T, i);
             const value = comptime if (synthetic) name else flagValue(tag, T, i, encode);
             try w.print(" | (({s}) << {d})", .{ value, at.bit + 16 });
+        } else if (comptime rt.isPackedFlagSet(Field)) {
+            // a packed flag set packs its fields into consecutive flag bits
+            // after the outer field's bit, each with its flat estree name
+            inline for (@typeInfo(Field).@"struct".field_names, 0..) |fname, j| {
+                const bit = comptime rt.layout(T, i).bit + rt.packedFlagBitForField(Field, j);
+                const value = comptime if (synthetic) fname else flagValueDeep(tag, Field, fname, encode);
+                try w.print(" | (({s}) << {d})", .{ value, bit + 16 });
+            }
         }
     }
     try w.writeAll(";\n");
@@ -511,10 +524,22 @@ fn checkOverrides(
     comptime encode: decoder.Encode,
 ) void {
     for (encode.fields) |override| {
-        if (!@hasField(T, override.field)) {
+        if (!hasFieldDeep(T, override.field)) {
             @compileError("no field '" ++ override.field ++ "' in " ++ tag);
         }
     }
+}
+
+/// True when `T` has the field `name`, looking through packed flag sets
+/// such as `PropertyDefinition.Modifiers`.
+fn hasFieldDeep(comptime T: type, comptime name: []const u8) bool {
+    if (@hasField(T, name)) return true;
+    for (@typeInfo(T).@"struct".field_types) |Field| {
+        if (comptime rt.isPackedFlagSet(Field)) {
+            if (@hasField(Field, name)) return true;
+        }
+    }
+    return false;
 }
 
 fn overrideOf(comptime encode: decoder.Encode, comptime name: []const u8) ?decoder.Override {
@@ -546,6 +571,31 @@ fn flagValue(
         if (Field == bool) return source ++ " === true";
         if (Field == ?ast.ImportPhase) return "_phase(" ++ source ++ ", n)";
         if (Field == ?ast.Hashbang) return source ++ " != null";
+        if (overrideOf(encode, name) != null) return source;
+        const fallback = if (info.field_attrs[index].defaultValue(Field)) |value|
+            std.fmt.comptimePrint("{d}", .{@backingInt(value)})
+        else
+            "-1";
+        return "_enum(" ++ decoder.tableName(Field) ++ ", " ++ source ++ ", " ++ fallback ++
+            ", n, \"" ++ key ++ "\")";
+    }
+}
+
+/// `flagValue` for a member of a packed flag set such as
+/// `PropertyDefinition.Modifiers`, resolved by its flat estree name.
+fn flagValueDeep(
+    comptime tag: []const u8,
+    comptime P: type,
+    comptime name: []const u8,
+    comptime encode: decoder.Encode,
+) []const u8 {
+    comptime {
+        const info = @typeInfo(P).@"struct";
+        const index = std.meta.fieldIndex(P, name).?;
+        const Field = info.field_types[index];
+        const source = sourceOf(tag, name, encode);
+        const key = decoder.estreeField(tag, name);
+        if (Field == bool) return source ++ " === true";
         if (overrideOf(encode, name) != null) return source;
         const fallback = if (info.field_attrs[index].defaultValue(Field)) |value|
             std.fmt.comptimePrint("{d}", .{@backingInt(value)})
