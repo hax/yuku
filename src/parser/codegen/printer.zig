@@ -319,7 +319,7 @@ const Printer = struct {
         return switch (data) {
             .variable_declaration => |d| isAmbient(self.tree, d),
             .function => |*f| isTSOnlyFunction(f),
-            .class => |c| c.declare,
+            .class => |ref| self.tree.classOf(ref).declare,
             .method_definition => |m| m.abstract or
                 self.nodeData(m.value).function.body == .null,
             .property_definition => |d| d.declare or d.abstract,
@@ -329,7 +329,7 @@ const Printer = struct {
             else
                 d.export_kind == .type or (d.specifiers.len > 0 and
                     !hasValueExportSpecifier(self.tree, self.tree.extra(d.specifiers))),
-            .export_default_declaration => |d| self.nodeData(d.declaration).isDeclaration() and
+            .export_default_declaration => |d| self.nodeData(d.declaration).isDeclaration(self.tree) and
                 self.stripsToNothing(d.declaration),
             .export_all_declaration => |d| d.export_kind == .type,
             else => false,
@@ -782,7 +782,7 @@ const Printer = struct {
             switch (data) {
                 .function => |f| if (f.type == .function_expression or
                     f.type == .ts_empty_body_function_expression) return true,
-                .class => |c| if (c.type == .class_expression) return true,
+                .class => |ref| if (self.tree.classOf(ref).type == .class_expression) return true,
                 .member_expression => |m| {
                     if (m.computed and isNamed(self.tree, m.object, "let")) return true;
                 },
@@ -819,6 +819,11 @@ const Printer = struct {
             inline else => |*node, tag| {
                 if (comptime tag == .dialect) {
                     return @call(.never_inline, emitDialect, .{ self, node, idx });
+                }
+                if (comptime tag == .class) {
+                    // side-stored payload: the union slot holds a ClassIndex
+                    const c = &self.tree.classes.items[@backingInt(node.*)];
+                    return @call(.never_inline, emit_class, .{ self, c, ctx });
                 }
                 if (comptime isChainLink(tag)) {
                     return @call(.never_inline, emitLink, .{ self, tag, node, ctx });
@@ -2295,7 +2300,7 @@ const Printer = struct {
         self: *Self,
         d: *const ast.ExportDefaultDeclaration,
     ) Error!void {
-        if (self.nodeData(d.declaration).isDeclaration()) {
+        if (self.nodeData(d.declaration).isDeclaration(self.tree)) {
             if (try self.skipStripped(d.declaration)) return;
             const hoisted = self.decoratorsBeforeExport(d.declaration);
             if (hoisted) |decorators| try self.printDecorators(decorators);
@@ -2311,7 +2316,7 @@ const Printer = struct {
     fn decoratorsBeforeExport(self: *const Self, declaration: NodeIndex) ?IndexRange {
         if (declaration == .null) return null;
         const decorators = switch (self.nodeData(declaration)) {
-            .class => |c| c.decorators,
+            .class => |ref| self.tree.classOf(ref).decorators,
             else => return null,
         };
         if (decorators.len == 0) return null;

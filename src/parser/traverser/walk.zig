@@ -142,6 +142,8 @@ fn Walker(comptime C: type, comptime V: type, comptime options: Options) type {
 
         fn fields(self: *Self, ctx: *C, payload: anytype, depth: u32) Step {
             const T = @TypeOf(payload);
+            // side-stored payload: the union slot holds a ClassIndex
+            if (T == ast.ClassIndex) return self.fields(ctx, ctx.tree.classOf(payload), depth);
             if (@typeInfo(T) != .@"struct") return .proceed;
             const info = @typeInfo(T).@"struct";
             inline for (info.field_names, info.field_types) |name, Field| {
@@ -209,6 +211,10 @@ fn Walker(comptime C: type, comptime V: type, comptime options: Options) type {
             const name = "enter_" ++ @tagName(tag);
             if (comptime !@hasDecl(V, name)) return .proceed;
             const payload = @field(data, @tagName(tag));
+            if (comptime tag == .class) {
+                // side-stored payload: hooks see the Class, not the ClassIndex
+                return unwrapAction(@field(V, name)(self.visitor, ctx.tree.classOf(payload), index, ctx));
+            }
             return unwrapAction(@field(V, name)(self.visitor, payload, index, ctx));
         }
 
@@ -222,7 +228,12 @@ fn Walker(comptime C: type, comptime V: type, comptime options: Options) type {
             if (!options.whole_tree or self.hooked()) {
                 const name = "exit_" ++ @tagName(tag);
                 if (comptime @hasDecl(V, name)) {
-                    @field(V, name)(self.visitor, @field(data, @tagName(tag)), index, ctx);
+                    if (comptime tag == .class) {
+                        // side-stored payload: hooks see the Class, not the ClassIndex
+                        @field(V, name)(self.visitor, ctx.tree.classOf(data.class), index, ctx);
+                    } else {
+                        @field(V, name)(self.visitor, @field(data, @tagName(tag)), index, ctx);
+                    }
                 }
                 if (comptime @hasDecl(V, "exit_node")) self.visitor.exit_node(data, index, ctx);
             }
@@ -316,24 +327,32 @@ fn walkDeepPushChildren(
 ) Allocator.Error!void {
     const children_start = steps.items.len;
     switch (data) {
-        inline else => |payload| {
-            const T = @TypeOf(payload);
-            if (@typeInfo(T) == .@"struct") {
-                const info = @typeInfo(T).@"struct";
-                inline for (info.field_names, info.field_types) |name, Field| {
-                    if (Field == ast.NodeIndex) {
-                        const child = @field(payload, name);
-                        try steps.append(gpa, .{ .index = child, .exit = null });
-                    } else if (Field == ast.IndexRange) {
-                        for (tree.extra(@field(payload, name))) |child| {
-                            try steps.append(gpa, .{ .index = child, .exit = null });
-                        }
-                    }
-                }
-            }
-        },
+        // side-stored payload: the union slot holds a ClassIndex
+        .class => |ref| try pushStructChildren(tree, tree.classOf(ref), steps, gpa),
+        inline else => |payload| try pushStructChildren(tree, payload, steps, gpa),
     }
     std.mem.reverse(WalkStep, steps.items[children_start..]);
+}
+
+fn pushStructChildren(
+    tree: anytype,
+    payload: anytype,
+    steps: *std.ArrayList(WalkStep),
+    gpa: Allocator,
+) Allocator.Error!void {
+    const T = @TypeOf(payload);
+    if (@typeInfo(T) != .@"struct") return;
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |name, Field| {
+        if (Field == ast.NodeIndex) {
+            const child = @field(payload, name);
+            try steps.append(gpa, .{ .index = child, .exit = null });
+        } else if (Field == ast.IndexRange) {
+            for (tree.extra(@field(payload, name))) |child| {
+                try steps.append(gpa, .{ .index = child, .exit = null });
+            }
+        }
+    }
 }
 
 inline fn unwrapAction(result: anytype) Allocator.Error!Action {
@@ -355,7 +374,7 @@ fn validateHooks(comptime V: type) void {
                 "': no field '" ++ node_name ++ "' exists in ast.NodeData");
         }
 
-        const expected = @FieldType(ast.NodeData, node_name);
+        const expected = ast.Payload(@field(ast.NodeTag, node_name));
         const hook_param_types = @typeInfo(@TypeOf(@field(V, name))).@"fn".param_types;
 
         if (hook_param_types.len >= 3) {

@@ -253,7 +253,7 @@ pub const ScopeTracker = struct {
                 }
             },
             .class => {
-                const cls = data.class;
+                const cls = self.tree.classOf(data.class);
                 // class code is always strict (15.7.14)
                 const flags = Scope.Flags{ .strict = true };
                 if (cls.type != .class_declaration and cls.id != .null) {

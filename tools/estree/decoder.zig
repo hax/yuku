@@ -15,6 +15,13 @@ const estree_tags = node_data.field_names[0 .. node_data.field_names.len - 1];
 const slots_word = word(rt.PackedNode, "slots");
 const slots_len = @typeInfo(@FieldType(rt.PackedNode, "slots")).array.len;
 
+/// Resolves a union field to the payload type consumers see. `class`
+/// payloads are side-stored (the union slot holds an `ast.ClassIndex`),
+/// but the wire packs the full `ast.Class`.
+fn payloadType(comptime name: []const u8) type {
+    return ast.Payload(@field(ast.NodeTag, name));
+}
+
 comptime {
     std.debug.assert(eql(node_data.field_names[estree_tags.len], "dialect"));
 }
@@ -411,7 +418,8 @@ fn writeTokenList(w: *Writer) !void {
 fn writeChildTables(w: *Writer) !void {
     @setEvalBranchQuota(1_000_000);
     try w.writeAll("const CHILD_SLOTS = [\n");
-    inline for (node_data.field_types) |T| {
+    inline for (node_data.field_names) |tag| {
+        const T = payloadType(tag);
         try w.writeAll("  [");
         if (@typeInfo(T) == .@"struct") {
             comptime var first = true;
@@ -1344,7 +1352,7 @@ fn typeNames(comptime E: type) []const []const u8 {
 fn childKeys(comptime tag: []const u8) []const []const u8 {
     comptime {
         if (specialOf(tag)) |special| if (special.keys) |keys| return keys;
-        const T = @FieldType(ast.NodeData, tag);
+        const T = payloadType(tag);
         var keys: []const []const u8 = &.{};
         if (@typeInfo(T) != .@"struct") return keys;
         const info = @typeInfo(T).@"struct";
@@ -1359,7 +1367,7 @@ fn childKeys(comptime tag: []const u8) []const []const u8 {
 
 fn nodeBody(comptime tag: []const u8) []const u8 {
     comptime {
-        const T = @FieldType(ast.NodeData, tag);
+        const T = payloadType(tag);
         if (specialOf(tag)) |special| return expand(tag, T, special.body);
 
         var fields: []const u8 = "";

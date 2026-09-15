@@ -131,6 +131,9 @@ pub const Tree = struct {
     nodes: NodeList = .empty,
     /// Child lists of all nodes, read with `extra()`.
     extras: std.ArrayList(NodeIndex) = .empty,
+    /// Side-stored `class` payloads. A `class` node's union slot holds a
+    /// `ClassIndex` into this array. Resolved with `classOf()`.
+    classes: std.ArrayList(Class) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     /// Every comment of the source in order, unless the comment mode is `.none`.
     comments: []const Comment = &.{},
@@ -218,6 +221,26 @@ pub const Tree = struct {
     pub inline fn extra(self: *const Tree, range: IndexRange) []const NodeIndex {
         std.debug.assert(range.start + range.len <= self.extras.items.len);
         return self.extras.items[range.start..][0..range.len];
+    }
+
+    /// Returns the class payload a `class` node's union slot points at.
+    pub inline fn classOf(self: *const Tree, ref: ClassIndex) Class {
+        std.debug.assert(ref != .null);
+        std.debug.assert(@backingInt(ref) < self.classes.items.len);
+        return self.classes.items[@backingInt(ref)];
+    }
+
+    /// Appends a `class` node with its payload side-stored, returning its index.
+    pub inline fn addClass(
+        self: *Tree,
+        class: Class,
+        node_span: Span,
+    ) error{OutOfMemory}!NodeIndex {
+        std.debug.assert(self.classes.items.len < std.math.maxInt(u32));
+        std.debug.assert(node_span.start <= node_span.end);
+        const ref: ClassIndex = @fromBackingInt(@intCast(self.classes.items.len));
+        try self.classes.append(self.arena.allocator(), class);
+        return self.addNode(.{ .class = ref }, node_span);
     }
 
     /// Replaces an existing node's data in place.
@@ -352,6 +375,13 @@ pub const Tree = struct {
 
 /// An index into `Tree.nodes`, where `.null` marks an absent child.
 pub const NodeIndex = enum(u32) { null = std.math.maxInt(u32), _ };
+
+/// An index into `Tree.classes`, the side-stored `class` payloads.
+///
+/// Class payloads stay out of the node union: at 40 bytes `Class` is the
+/// largest variant, while class nodes are rare, so every node would
+/// otherwise pay for the largest one's size.
+pub const ClassIndex = enum(u32) { null = std.math.maxInt(u32), _ };
 
 /// A child list, as a window into `Tree.extras`.
 pub const IndexRange = struct {
@@ -2196,7 +2226,7 @@ pub const NodeData = union(enum) {
     yield_expression: YieldExpression,
     meta_property: MetaProperty,
     decorator: Decorator,
-    class: Class,
+    class: ClassIndex,
     class_body: ClassBody,
     method_definition: MethodDefinition,
     property_definition: PropertyDefinition,
@@ -2346,7 +2376,7 @@ pub const NodeData = union(enum) {
     dialect: Dialect,
 
     /// Whether the node is an expression, counting only expression forms of `function` and `class`.
-    pub fn isExpression(self: NodeData) bool {
+    pub fn isExpression(self: NodeData, tree: *const Tree) bool {
         return switch (self) {
             .identifier_reference,
             .this_expression,
@@ -2388,13 +2418,13 @@ pub const NodeData = union(enum) {
             => true,
             .function => |f| f.type == .function_expression or
                 f.type == .ts_empty_body_function_expression,
-            .class => |c| c.type == .class_expression,
+            .class => |ref| tree.classOf(ref).type == .class_expression,
             else => false,
         };
     }
 
     /// Whether the node is a statement, counting only declaration forms of `function` and `class`.
-    pub fn isStatement(self: NodeData) bool {
+    pub fn isStatement(self: NodeData, tree: *const Tree) bool {
         return switch (self) {
             .if_statement,
             .switch_statement,
@@ -2429,7 +2459,7 @@ pub const NodeData = union(enum) {
             .ts_namespace_export_declaration,
             => true,
             .function => |f| f.type == .function_declaration or f.type == .ts_declare_function,
-            .class => |c| c.type == .class_declaration,
+            .class => |ref| tree.classOf(ref).type == .class_declaration,
             else => false,
         };
     }
@@ -2472,7 +2502,7 @@ pub const NodeData = union(enum) {
     }
 
     /// Whether the node is a declaration, imports, exports, and TypeScript ones included.
-    pub fn isDeclaration(self: NodeData) bool {
+    pub fn isDeclaration(self: NodeData, tree: *const Tree) bool {
         return switch (self) {
             .variable_declaration,
             .import_declaration,
@@ -2487,7 +2517,7 @@ pub const NodeData = union(enum) {
             .ts_import_equals_declaration,
             => true,
             .function => |f| f.type == .function_declaration or f.type == .ts_declare_function,
-            .class => |c| c.type == .class_declaration,
+            .class => |ref| tree.classOf(ref).type == .class_declaration,
             else => false,
         };
     }
@@ -2557,6 +2587,17 @@ pub const NodeData = union(enum) {
 /// The kind of a node, the active tag of its `NodeData`.
 pub const NodeTag = std.meta.Tag(NodeData);
 
+/// The payload type a consumer sees for a node kind. `class` payloads are
+/// side-stored in `Tree.classes` with a `ClassIndex` in the union slot, so
+/// generic machinery such as visitors and serializers resolves the payload
+/// type through here instead of the union field.
+pub fn Payload(comptime tag: NodeTag) type {
+    return switch (tag) {
+        .class => Class,
+        else => @FieldType(NodeData, @tagName(tag)),
+    };
+}
+
 pub const Node = struct {
     data: NodeData,
     span: Span,
@@ -2565,8 +2606,8 @@ pub const Node = struct {
 pub const NodeList = std.MultiArrayList(Node);
 
 comptime {
-    std.debug.assert(@sizeOf(NodeData) == 44);
-    std.debug.assert(@sizeOf(Node) == 52);
+    std.debug.assert(@sizeOf(NodeData) == 36);
+    std.debug.assert(@sizeOf(Node) == 44);
     std.debug.assert(@sizeOf(Class) == 40);
     std.debug.assert(@sizeOf(PropertyDefinition) == 32);
 }

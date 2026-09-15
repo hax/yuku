@@ -705,7 +705,7 @@ pub const SymbolTracker = struct {
             },
 
             .class => {
-                const cls = data.class;
+                const cls = self.tree.classOf(data.class);
                 try self.pushSavedContext();
                 const is_decl = cls.type == .class_declaration;
                 self.pending = .{
@@ -1561,7 +1561,7 @@ fn typeParameterHidden(
         parent = node_parents[@backingInt(parent)];
     }) {
         switch (tree.data(parent)) {
-            .class => |cls| if (parent == owner and child == cls.super_class) return true,
+            .class => |ref| if (parent == owner and child == tree.classOf(ref).super_class) return true,
             inline .method_definition,
             .property_definition,
             .ts_property_signature,
@@ -1742,7 +1742,7 @@ fn hasExportStatement(tree: *const ast.Tree, statements: []const ast.NodeIndex) 
             .export_all_declaration, .ts_export_assignment => return true,
             .export_default_declaration => |e| switch (tree.data(e.declaration)) {
                 .function => |func| if (func.type == .function_expression) return true,
-                .class => |cls| if (cls.type == .class_expression) return true,
+                .class => |ref| if (tree.classOf(ref).type == .class_expression) return true,
                 .ts_interface_declaration => {},
                 else => return true,
             },
@@ -1755,13 +1755,13 @@ fn hasExportStatement(tree: *const ast.Tree, statements: []const ast.NodeIndex) 
 fn declaresName(tree: *const ast.Tree, stmt: ast.NodeIndex, name: []const u8) bool {
     const id = switch (tree.data(stmt)) {
         inline .function,
-        .class,
         .ts_interface_declaration,
         .ts_type_alias_declaration,
         .ts_enum_declaration,
         .ts_module_declaration,
         .ts_import_equals_declaration,
         => |decl| decl.id,
+        .class => |ref| tree.classOf(ref).id,
         .variable_declaration => |decl| {
             for (tree.extra(decl.declarators)) |declarator| {
                 const target = tree.data(declarator).variable_declarator.id;
