@@ -473,8 +473,7 @@ fn slotOf(comptime T: type, comptime field: []const u8) u32 {
         @compileError("no field " ++ field));
 }
 fn flagBit(comptime T: type, comptime field: []const u8) u32 {
-    return rt.flagBitForField(T, std.meta.fieldIndex(T, field) orelse
-        @compileError("no field " ++ field));
+    return rt.flagBitForFieldDeep(T, field);
 }
 fn flagMask(comptime T: type, comptime field: []const u8) u32 {
     return @as(u32, 1) << @intCast(flagBit(T, field));
