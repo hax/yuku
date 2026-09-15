@@ -124,8 +124,14 @@ fn Walker(comptime C: type, comptime V: type, comptime options: Options) type {
             if (action == .proceed) {
                 // a mutable walk calls `fields` from two places, which would outline it
                 const modifier: std.builtin.CallModifier = if (mutates) .always_inline else .auto;
-                const payload = @field(data, @tagName(tag));
-                result = @call(modifier, fields, .{ self, ctx, payload, depth + 1 });
+                if (comptime tag == .class) {
+                    // heritage-split payload: walk the reassembled logical Class
+                    const class = ctx.tree.classOf(data.class);
+                    result = @call(modifier, fields, .{ self, ctx, class, depth + 1 });
+                } else {
+                    const payload = @field(data, @tagName(tag));
+                    result = @call(modifier, fields, .{ self, ctx, payload, depth + 1 });
+                }
                 if (result == .fail) return .fail;
             }
             self.exit(ctx, tag, data, index);
@@ -208,6 +214,11 @@ fn Walker(comptime C: type, comptime V: type, comptime options: Options) type {
             }
             const name = "enter_" ++ @tagName(tag);
             if (comptime !@hasDecl(V, name)) return .proceed;
+            if (comptime tag == .class) {
+                // heritage-split payload: hooks see the reassembled logical Class
+                const class = ctx.tree.classOf(data.class);
+                return unwrapAction(@field(V, name)(self.visitor, class, index, ctx));
+            }
             const payload = @field(data, @tagName(tag));
             return unwrapAction(@field(V, name)(self.visitor, payload, index, ctx));
         }
@@ -222,7 +233,12 @@ fn Walker(comptime C: type, comptime V: type, comptime options: Options) type {
             if (!options.whole_tree or self.hooked()) {
                 const name = "exit_" ++ @tagName(tag);
                 if (comptime @hasDecl(V, name)) {
-                    @field(V, name)(self.visitor, @field(data, @tagName(tag)), index, ctx);
+                    if (comptime tag == .class) {
+                        // heritage-split payload: hooks see the reassembled logical Class
+                        @field(V, name)(self.visitor, ctx.tree.classOf(data.class), index, ctx);
+                    } else {
+                        @field(V, name)(self.visitor, @field(data, @tagName(tag)), index, ctx);
+                    }
                 }
                 if (comptime @hasDecl(V, "exit_node")) self.visitor.exit_node(data, index, ctx);
             }
@@ -316,24 +332,36 @@ fn walkDeepPushChildren(
 ) Allocator.Error!void {
     const children_start = steps.items.len;
     switch (data) {
+        // heritage-split payload: push the reassembled logical Class children
+        .class => |core| try pushStructChildren(tree, ast.Class, tree.classOf(core), steps, gpa),
         inline else => |payload| {
             const T = @TypeOf(payload);
             if (@typeInfo(T) == .@"struct") {
-                const info = @typeInfo(T).@"struct";
-                inline for (info.field_names, info.field_types) |name, Field| {
-                    if (Field == ast.NodeIndex) {
-                        const child = @field(payload, name);
-                        try steps.append(gpa, .{ .index = child, .exit = null });
-                    } else if (Field == ast.IndexRange) {
-                        for (tree.extra(@field(payload, name))) |child| {
-                            try steps.append(gpa, .{ .index = child, .exit = null });
-                        }
-                    }
-                }
+                try pushStructChildren(tree, T, payload, steps, gpa);
             }
         },
     }
     std.mem.reverse(WalkStep, steps.items[children_start..]);
+}
+
+fn pushStructChildren(
+    tree: anytype,
+    comptime T: type,
+    payload: T,
+    steps: *std.ArrayList(WalkStep),
+    gpa: Allocator,
+) Allocator.Error!void {
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |name, Field| {
+        if (Field == ast.NodeIndex) {
+            const child = @field(payload, name);
+            try steps.append(gpa, .{ .index = child, .exit = null });
+        } else if (Field == ast.IndexRange) {
+            for (tree.extra(@field(payload, name))) |child| {
+                try steps.append(gpa, .{ .index = child, .exit = null });
+            }
+        }
+    }
 }
 
 inline fn unwrapAction(result: anytype) Allocator.Error!Action {
@@ -355,7 +383,7 @@ fn validateHooks(comptime V: type) void {
                 "': no field '" ++ node_name ++ "' exists in ast.NodeData");
         }
 
-        const expected = @FieldType(ast.NodeData, node_name);
+        const expected = ast.Payload(@field(ast.NodeTag, node_name));
         const hook_param_types = @typeInfo(@TypeOf(@field(V, name))).@"fn".param_types;
 
         if (hook_param_types.len >= 3) {
