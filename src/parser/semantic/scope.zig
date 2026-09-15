@@ -280,11 +280,11 @@ pub const ScopeTracker = struct {
             .ts_enum_body,
             => try self.pushScope(.block, index, self.inheritStrictFlag()),
             .ts_module_block => try self.pushScope(.ts_module, index, self.inheritStrictFlag()),
-            .class => |cls| {
+            .class => |ref| {
                 // class code is always strict (15.7.14)
                 const flags = Scope.Flags{ .strict = true };
 
-                if (isNamedClassExpression(cls))
+                if (isNamedClassExpression(self.tree.classOf(ref)))
                     try self.pushScope(.expression_name, index, flags);
 
                 try self.pushScope(.class, index, flags);

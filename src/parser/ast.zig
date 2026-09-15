@@ -156,6 +156,9 @@ pub const Tree = struct {
     nodes: NodeList = .empty,
     /// Child lists of all nodes, resolved with `extra()`.
     extras: std.ArrayList(NodeIndex) = .empty,
+    /// Side-stored `class` payloads. A `class` node's union slot holds a
+    /// `ClassIndex` into this array. Resolved through `tree.classOf(ref)`.
+    classes: std.ArrayList(Class) = .empty,
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     /// Every comment in source order. Populated when the comment mode is
     /// `.flat` or `.both`.
@@ -249,6 +252,26 @@ pub const Tree = struct {
     pub inline fn extra(self: *const Tree, range: IndexRange) []const NodeIndex {
         std.debug.assert(range.start + range.len <= self.extras.items.len);
         return self.extras.items[range.start..][0..range.len];
+    }
+
+    /// Returns the class payload for a `class` node's union slot.
+    pub inline fn classOf(self: *const Tree, ref: ClassIndex) Class {
+        std.debug.assert(ref != .null);
+        std.debug.assert(@intFromEnum(ref) < self.classes.items.len);
+        return self.classes.items[@intFromEnum(ref)];
+    }
+
+    /// Creates a new `class` node with its payload side-stored. Returns
+    /// the node index.
+    pub inline fn addClass(
+        self: *Tree,
+        class: Class,
+        node_span: Span,
+    ) error{OutOfMemory}!NodeIndex {
+        std.debug.assert(self.classes.items.len < std.math.maxInt(u32));
+        const ref: ClassIndex = @enumFromInt(@as(u32, @intCast(self.classes.items.len)));
+        try self.classes.append(self.arena.allocator(), class);
+        return self.addNode(.{ .class = ref }, node_span);
     }
 
     /// Replaces an existing node's data in place.
@@ -356,6 +379,14 @@ pub const Tree = struct {
 
 /// Index into `Tree.nodes`. `.null` marks an absent child.
 pub const NodeIndex = enum(u32) { null = std.math.maxInt(u32), _ };
+
+/// Index into the side-stored class payload array (`Tree.classes`).
+///
+/// Class payloads are kept out of the node union: at 40 bytes `Class` is
+/// the largest variant, while class nodes are rare (about one per 25k
+/// nodes in real files), so every node would otherwise pay for the
+/// largest one's size.
+pub const ClassIndex = enum(u32) { null = std.math.maxInt(u32), _ };
 
 /// A child list, stored as a window into `Tree.extras`.
 pub const IndexRange = struct {
@@ -2272,7 +2303,7 @@ pub const NodeData = union(enum) {
     yield_expression: YieldExpression,
     meta_property: MetaProperty,
     decorator: Decorator,
-    class: Class,
+    class: ClassIndex,
     class_body: ClassBody,
     method_definition: MethodDefinition,
     property_definition: PropertyDefinition,
@@ -2419,9 +2450,13 @@ pub const NodeData = union(enum) {
     jsx_text: JSXText,
     jsx_spread_child: JSXSpreadChild,
 
-    /// True when the node produces a value at runtime. For `function` and
-    /// `class`, only the expression forms count.
-    pub fn isExpression(self: NodeData) bool {
+    /// True when this node produces a value at runtime.
+    ///
+    /// Covers literals, identifiers used as values, operator expressions,
+    /// member access, calls, function and class expressions, JSX elements,
+    /// and the TypeScript value-position wrappers. For dual-purpose nodes
+    /// (`function`, `class`) the `type` field is consulted.
+    pub fn isExpression(self: NodeData, tree: *const Tree) bool {
         return switch (self) {
             .identifier_reference,
             .this_expression,
@@ -2463,14 +2498,23 @@ pub const NodeData = union(enum) {
             => true,
             .function => |f| f.type == .function_expression or
                 f.type == .ts_empty_body_function_expression,
-            .class => |c| c.type == .class_expression,
+            .class => |ref| tree.classOf(ref).type == .class_expression,
             else => false,
         };
     }
 
+<<<<<<< HEAD
     /// True when the node is valid in statement position. For `function` and
     /// `class`, only the declaration forms count.
     pub fn isStatement(self: NodeData) bool {
+=======
+    /// True when this node is valid at statement position.
+    ///
+    /// Covers control flow, structural statements, declarations, imports
+    /// and exports, and TypeScript top-level declarations. For dual-purpose
+    /// nodes (`function`, `class`) the `type` field is consulted.
+    pub fn isStatement(self: NodeData, tree: *const Tree) bool {
+>>>>>>> a34fc023 (perf(ast): spill class payloads into a side array)
         return switch (self) {
             .if_statement,
             .switch_statement,
@@ -2505,7 +2549,7 @@ pub const NodeData = union(enum) {
             .ts_namespace_export_declaration,
             => true,
             .function => |f| f.type == .function_declaration or f.type == .ts_declare_function,
-            .class => |c| c.type == .class_declaration,
+            .class => |ref| tree.classOf(ref).type == .class_declaration,
             else => false,
         };
     }
@@ -2548,10 +2592,18 @@ pub const NodeData = union(enum) {
         };
     }
 
+<<<<<<< HEAD
     /// True for declarations, including imports, exports, and TypeScript
     /// declarations. For `function` and `class`, only the declaration forms
     /// count.
     pub fn isDeclaration(self: NodeData) bool {
+=======
+    /// True for declaration nodes that introduce one or more bindings.
+    ///
+    /// Covers `variable_declaration`, function and class declaration forms,
+    /// imports and exports, and TypeScript declaration kinds.
+    pub fn isDeclaration(self: NodeData, tree: *const Tree) bool {
+>>>>>>> a34fc023 (perf(ast): spill class payloads into a side array)
         return switch (self) {
             .variable_declaration,
             .import_declaration,
@@ -2566,7 +2618,7 @@ pub const NodeData = union(enum) {
             .ts_import_equals_declaration,
             => true,
             .function => |f| f.type == .function_declaration or f.type == .ts_declare_function,
-            .class => |c| c.type == .class_declaration,
+            .class => |ref| tree.classOf(ref).type == .class_declaration,
             else => false,
         };
     }
@@ -2632,6 +2684,17 @@ pub const NodeData = union(enum) {
     }
 };
 
+/// The payload type a consumer sees for a node kind. `class` payloads are
+/// side-stored in `Tree.classes` and the union slot holds a `ClassIndex`,
+/// so generic machinery (visitors, serializers, code generators) must
+/// resolve the payload type through here instead of the union field.
+pub fn Payload(comptime tag: std.meta.Tag(NodeData)) type {
+    return switch (tag) {
+        .class => Class,
+        else => @FieldType(NodeData, @tagName(tag)),
+    };
+}
+
 pub const Node = struct {
     data: NodeData,
     span: Span,
@@ -2640,8 +2703,8 @@ pub const Node = struct {
 pub const NodeList = std.MultiArrayList(Node);
 
 comptime {
-    std.debug.assert(@sizeOf(NodeData) == 44);
-    std.debug.assert(@sizeOf(Node) == 52);
+    std.debug.assert(@sizeOf(NodeData) == 36);
+    std.debug.assert(@sizeOf(Node) == 44);
     std.debug.assert(@sizeOf(Class) == 40);
     std.debug.assert(@sizeOf(PropertyDefinition) == 32);
 }

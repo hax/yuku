@@ -403,6 +403,7 @@ pub const Parser = struct {
             .prev_token_end = self.prev_token_end,
             .nodes_len = self.tree.nodes.len,
             .extras_len = self.tree.extras.items.len,
+            .classes_len = self.tree.classes.items.len,
             .diagnostics_len = self.diagnostics.items.len,
             .tokens_len = self.tokens.items.len,
             .context = self.context,
@@ -421,6 +422,7 @@ pub const Parser = struct {
         self.prev_token_end = cp.prev_token_end;
         self.tree.nodes.shrinkRetainingCapacity(cp.nodes_len);
         self.tree.extras.shrinkRetainingCapacity(cp.extras_len);
+        self.tree.classes.shrinkRetainingCapacity(cp.classes_len);
         self.diagnostics.shrinkRetainingCapacity(cp.diagnostics_len);
         self.tokens.shrinkRetainingCapacity(cp.tokens_len);
         self.context = cp.context;
@@ -679,6 +681,7 @@ pub const Checkpoint = struct {
 
     nodes_len: usize,
     extras_len: usize,
+    classes_len: usize,
     diagnostics_len: usize,
     tokens_len: usize,
 
