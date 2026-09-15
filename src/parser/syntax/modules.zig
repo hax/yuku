@@ -763,7 +763,7 @@ fn exportKindForDeclaration(parser: *Parser, declaration: ast.NodeIndex) ast.Imp
         .ts_global_declaration => |d| d.declare,
         .variable_declaration => |d| d.declare,
         .function => |d| d.declare,
-        .class => |d| d.declare,
+        .class => |d| parser.tree.classOf(d).declare,
         else => return .value,
     };
     return if (declared) .type else .value;

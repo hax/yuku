@@ -45,6 +45,7 @@ pub fn attach(tree: *ast.Tree, raw: []const ast.Comment) Error!void {
         .spans = tree.nodes.items(.span),
         .data_items = tree.nodes.items(.data),
         .extras = tree.extras.items,
+        .classes = tree.classes.items,
         .source = tree.source,
         .raw = raw,
         .out = unsorted,
@@ -90,6 +91,7 @@ const Ctx = struct {
     spans: []const ast.Span,
     data_items: []const ast.NodeData,
     extras: []const ast.NodeIndex,
+    classes: []const ast.Class,
     source: []const u8,
     raw: []const ast.Comment,
     out: []ast.AttachedComment,
@@ -126,18 +128,21 @@ const Ctx = struct {
             // quasis are literal text, never comment hosts
             .template_literal => |t| try self.pushRange(t.expressions),
             .ts_template_literal_type => |t| try self.pushRange(t.types),
-            inline else => |payload| {
-                const T = @TypeOf(payload);
-                if (@typeInfo(T) != .@"struct") return;
-                inline for (std.meta.fields(T)) |f| {
-                    if (f.type == ast.NodeIndex) {
-                        const child = @field(payload, f.name);
-                        if (child != .null) try self.pushChild(child);
-                    } else if (f.type == ast.IndexRange) {
-                        try self.pushRange(@field(payload, f.name));
-                    }
-                }
-            },
+            // side-stored payload: the union slot holds a ClassIndex
+            .class => |ref| try self.collectFields(ast.Class, self.classes[@intFromEnum(ref)]),
+            inline else => |payload| try self.collectFields(@TypeOf(payload), payload),
+        }
+    }
+
+    fn collectFields(self: *Ctx, comptime T: type, payload: T) Error!void {
+        if (@typeInfo(T) != .@"struct") return;
+        inline for (std.meta.fields(T)) |f| {
+            if (f.type == ast.NodeIndex) {
+                const child = @field(payload, f.name);
+                if (child != .null) try self.pushChild(child);
+            } else if (f.type == ast.IndexRange) {
+                try self.pushRange(@field(payload, f.name));
+            }
         }
     }
 

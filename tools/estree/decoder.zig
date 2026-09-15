@@ -11,6 +11,13 @@ const ModuleFlags = parser.semantic.module_record.Flags;
 
 const Writer = std.Io.Writer;
 
+/// Resolves a union field to the payload type consumers see. `class`
+/// payloads are side-stored (the union slot holds an `ast.ClassIndex`),
+/// but the wire packs the full `ast.Class`.
+fn payloadType(comptime name: []const u8) type {
+    return ast.Payload(@field(std.meta.Tag(ast.NodeData), name));
+}
+
 pub const Mode = enum { parser, analyzer };
 
 // generates decode.js, the binary AST buffer read back into ESTree. parser mode
@@ -668,9 +675,9 @@ pub fn generateWalkTables(w: *Writer) !void {
             }
         } else {
             try w.print("ck(\"{s}\", [", .{comptime meta.estreeType(field.name)});
-            if (@typeInfo(field.type) == .@"struct") {
+            if (@typeInfo(payloadType(field.name)) == .@"struct") {
                 comptime var first = true;
-                inline for (std.meta.fields(field.type)) |f| {
+                inline for (std.meta.fields(payloadType(field.name))) |f| {
                     if (f.type == ast.NodeIndex or f.type == ast.IndexRange) {
                         if (!first) try w.writeAll(", ");
                         try w.print("\"{s}\"", .{comptime meta.estreeField(field.name, f.name)});
@@ -716,21 +723,21 @@ fn writeChildTables(w: *Writer) !void {
     try w.writeAll("const CHILD_SLOTS = [\n");
     inline for (@typeInfo(ast.NodeData).@"union".fields) |field| {
         try w.writeAll("  [");
-        if (@typeInfo(field.type) == .@"struct") {
+        if (@typeInfo(payloadType(field.name)) == .@"struct") {
             comptime var first = true;
-            inline for (std.meta.fields(field.type), 0..) |f, i| {
+            inline for (std.meta.fields(payloadType(field.name)), 0..) |f, i| {
                 if (f.type == ast.NodeIndex or f.type == ast.IndexRange) {
                     if (!first) try w.writeAll(", ");
                     const kind: u32 = if (f.type == ast.NodeIndex)
                         0
-                    else switch (comptime rt.rangeIndexOf(field.type, i)) {
+                    else switch (comptime rt.rangeIndexOf(payloadType(field.name), i)) {
                         0 => 2,
                         1 => 3,
                         else => 1,
                     };
                     try w.print("{d}, {d}", .{
                         kind,
-                        comptime rt.u32SlotForField(field.type, i) + rt.NODE_HEADER_U32S,
+                        comptime rt.u32SlotForField(payloadType(field.name), i) + rt.NODE_HEADER_U32S,
                     });
                     first = false;
                 }
@@ -824,10 +831,10 @@ fn writeNodeCases(w: *Writer) !void {
         if (comptime isSpecial(field.name)) {
             try writeSpecialCase(&body_w, field.name);
         } else {
-            try writeGenericCase(&body_w, field.name, field.type);
+            try writeGenericCase(&body_w, field.name, payloadType(field.name));
         }
         const body = body_w.buffered();
-        try writeCaseOpen(w, tag, field.type, body);
+        try writeCaseOpen(w, tag, payloadType(field.name), body);
         try w.writeAll(body);
         try w.writeAll(" }\n");
     }

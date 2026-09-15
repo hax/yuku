@@ -448,7 +448,7 @@ const Printer = struct {
             switch (data) {
                 .function => |f| if (f.type == .function_expression or
                     f.type == .ts_empty_body_function_expression) return true,
-                .class => |c| if (c.type == .class_expression) return true,
+                .class => |ref| if (self.tree.classOf(ref).type == .class_expression) return true,
                 .member_expression => |m| if (m.computed and self.isLetIdentifier(m.object)) return true,
                 else => {},
             }
@@ -493,6 +493,9 @@ const Printer = struct {
             inline else => |*node, tag| {
                 if (comptime fixedString(tag)) |s| {
                     try self.writeStr(s);
+                } else if (comptime tag == .class) {
+                    // side-stored payload: the union slot holds a ClassIndex
+                    try self.emit_class(&self.tree.classes.items[@intFromEnum(node.*)]);
                 } else {
                     const fn_name = "emit_" ++ @tagName(tag);
                     if (comptime @hasDecl(Self, fn_name)) {

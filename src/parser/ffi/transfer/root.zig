@@ -261,7 +261,8 @@ pub fn totalFlagBits(comptime T: type) u8 {
 fn validateAllNodeLayouts() void {
     @setEvalBranchQuota(10_000);
     for (@typeInfo(ast.NodeData).@"union".fields) |field| {
-        const T = field.type;
+        // side-stored payloads validate against the struct they pack as
+        const T = ast.Payload(@field(std.meta.Tag(ast.NodeData), field.name));
         if (@typeInfo(T) != .@"struct") continue;
         if (totalU32Slots(T) > NODE_DATA_SLOTS) @compileError(std.fmt.comptimePrint(
             "node '{s}' needs more than {d} u32 slots",
@@ -340,7 +341,7 @@ pub fn serializeInto(tree: *const ast.Tree, buf: []u8) usize {
     const data_items = tree.nodes.items(.data);
     const span_items = tree.nodes.items(.span);
     for (data_items, span_items, 0..) |*data, span, i| {
-        nodes_out[i] = packNode(data, span);
+        nodes_out[i] = packNode(tree, data, span);
     }
     pos += @as(usize, hdr.node_count) * NODE_SIZE;
 
@@ -427,13 +428,18 @@ pub fn serializeInto(tree: *const ast.Tree, buf: []u8) usize {
     return pos;
 }
 
-fn packNode(data: *const ast.NodeData, span: ast.Span) PackedNode {
+fn packNode(tree: *const ast.Tree, data: *const ast.NodeData, span: ast.Span) PackedNode {
     std.debug.assert(span.start <= span.end);
     var n: PackedNode = std.mem.zeroes(PackedNode);
     n.span_start = span.start;
     n.span_end = span.end;
-    // captured by pointer to avoid copying the 44-byte union per node
+    // captured by pointer to avoid copying the union per node
     switch (data.*) {
+        // side-stored payload: pack the struct the slot points at
+        .class => |*ref| {
+            n.tag = @intFromEnum(std.meta.Tag(ast.NodeData).class);
+            packPayload(&n, &tree.classes.items[@intFromEnum(ref.*)]);
+        },
         inline else => |*payload, tag| {
             n.tag = @intFromEnum(tag);
             packPayload(&n, payload);
@@ -550,7 +556,7 @@ pub fn deserializeFromBuf(
     for (0..hdr.node_count) |i| {
         const pn = nodes_in[i];
         tree.nodes.set(i, .{
-            .data = unpackNode(pn),
+            .data = try unpackNode(&tree, pn),
             .span = .{ .start = pn.span_start, .end = pn.span_end },
         });
     }
@@ -622,10 +628,20 @@ pub fn deserializeFromBuf(
     return tree;
 }
 
-fn unpackNode(p: PackedNode) ast.NodeData {
+fn unpackNode(tree: *ast.Tree, p: PackedNode) DeserializeError!ast.NodeData {
     @setEvalBranchQuota(100_000);
     inline for (@typeInfo(ast.NodeData).@"union".fields, 0..) |field, tag| {
         if (p.tag == tag) {
+            // side-stored payload: unpack the struct into `tree.classes`
+            // and leave a ClassIndex in the union slot
+            if (comptime std.mem.eql(u8, field.name, "class")) {
+                var payload: ast.Class = std.mem.zeroes(ast.Class);
+                unpackPayload(ast.Class, p, &payload);
+                std.debug.assert(tree.classes.items.len < std.math.maxInt(u32));
+                const ref: ast.ClassIndex = @enumFromInt(@as(u32, @intCast(tree.classes.items.len)));
+                try tree.classes.append(tree.arena.allocator(), payload);
+                return .{ .class = ref };
+            }
             const T = field.type;
             var payload: T = std.mem.zeroes(T);
             unpackPayload(T, p, &payload);

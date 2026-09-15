@@ -756,8 +756,9 @@ pub const SymbolTracker = struct {
                 if (!is_decl) self.export_state = .none;
             },
 
-            .class => |cls| {
+            .class => |ref| {
                 try self.pushSavedContext();
+                const cls = self.tree.classOf(ref);
                 const is_decl = cls.type == .class_declaration;
                 self.pending = .{
                     .flags = .{
