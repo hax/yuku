@@ -129,6 +129,30 @@ pub fn enumBitWidth(comptime E: type) u8 {
     return std.math.log2_int_ceil(usize, @typeInfo(E).@"enum".field_names.len);
 }
 
+/// True when `T` is a packed struct of bool/enum flags, stored inline in the
+/// node's flag word instead of as separate flag bits of the outer payload.
+pub fn isPackedFlagSet(comptime T: type) bool {
+    const info = @typeInfo(T);
+    if (info != .@"struct") return false;
+    const s = info.@"struct";
+    if (s.layout != .@"packed") return false;
+    for (s.field_types) |F| {
+        if (F != bool and @typeInfo(F) != .@"enum") return false;
+    }
+    return true;
+}
+
+/// First flag bit of field `target` within packed flag set `T`.
+pub fn packedFlagBitForField(comptime T: type, comptime target: usize) u8 {
+    comptime {
+        var bit: u8 = 0;
+        for (@typeInfo(T).@"struct".field_types[0..target]) |F| {
+            bit += if (F == bool) 1 else enumBitWidth(F);
+        }
+        return bit;
+    }
+}
+
 fn fieldSize(comptime Field: type, comptime T: type) Layout {
     if (Field == bool) return .{ .bit = 1, .slot = 0 };
     if (Field == ?ast.ImportPhase) return .{ .bit = 1 + enumBitWidth(ast.ImportPhase), .slot = 0 };
@@ -136,6 +160,7 @@ fn fieldSize(comptime Field: type, comptime T: type) Layout {
     if (Field == ast.NodeIndex) return .{ .bit = 0, .slot = 1 };
     if (Field == ast.IndexRange or Field == ast.String) return .{ .bit = 0, .slot = 2 };
     if (@typeInfo(Field) == .@"enum") return .{ .bit = enumBitWidth(Field), .slot = 0 };
+    if (comptime isPackedFlagSet(Field)) return .{ .bit = @bitSizeOf(Field), .slot = 0 };
     @compileError("unsupported field type '" ++ @typeName(Field) ++ "' in " ++ @typeName(T));
 }
 
@@ -429,6 +454,9 @@ fn packPayload(n: *PackedNode, payload: anytype, offsets: *const utf16.Offsets) 
             n.slots[at.slot + 1] = string.end;
         } else if (@typeInfo(Field) == .@"enum") {
             setFlagBits(n, at.bit, @backingInt(val));
+        } else if (comptime isPackedFlagSet(Field)) {
+            const bits: std.meta.BackingInt(Field) = @bitCast(val);
+            setFlagBits(n, at.bit, bits);
         } else if (Field == ?ast.ImportPhase) {
             if (val) |v| {
                 setFlagBits(n, at.bit, 1);
@@ -570,9 +598,27 @@ const Reader = struct {
                 })
             else if (@typeInfo(Field) == .@"enum")
                 try enumOf(Field, flagBits(n, at.bit, enumBitWidth(Field)))
-            else
-                @compileError("unsupported field type '" ++ @typeName(Field) ++ "' in " ++
-                    @typeName(T));
+            else if (comptime isPackedFlagSet(Field)) blk: {
+                // a packed flag set packs its fields into consecutive flag bits,
+                // first field lowest, matching the packed struct's bit order
+                const flags = flagBits(n, at.bit, @bitSizeOf(Field));
+                var packed_value: Field = undefined;
+                inline for (
+                    @typeInfo(Field).@"struct".field_names,
+                    @typeInfo(Field).@"struct".field_types,
+                    0..,
+                ) |fname, F, j| {
+                    const shift = comptime packedFlagBitForField(Field, j);
+                    const raw = (flags >> shift) & ((1 << @bitSizeOf(F)) - 1);
+                    if (F == bool) {
+                        @field(packed_value, fname) = raw != 0;
+                    } else {
+                        @field(packed_value, fname) = try enumOf(F, raw);
+                    }
+                }
+                break :blk packed_value;
+            } else @compileError("unsupported field type '" ++ @typeName(Field) ++ "' in " ++
+                @typeName(T));
         }
         return value;
     }
