@@ -1215,7 +1215,7 @@ pub const Checker = struct {
                         {
                             while (iter.next()) |ancestor| {
                                 if (ctx.tree.data(ancestor) == .class)
-                                    return if (ctx.tree.data(ancestor).class.super_class != .null)
+                                    return if (ctx.tree.classOf(ctx.tree.data(ancestor).class).super_class != .null)
                                         .valid
                                     else
                                         .no_extends;

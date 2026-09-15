@@ -61,6 +61,9 @@ fn walkChildren(
     ctx: *C,
 ) Allocator.Error!Action {
     switch (data) {
+        // heritage-split payload: walk the reassembled logical Class so
+        // that extends and implements children are visited too
+        .class => |core| return walkStructFields(C, V, visitor, ast.Class, ctx.tree.classOf(core), ctx),
         inline else => |node| {
             const T = @TypeOf(node);
             if (@typeInfo(T) == .@"struct") {
@@ -177,6 +180,9 @@ pub const dispatch = struct {
             inline else => |node, tag| {
                 if (comptime @hasDecl(V, "enter_" ++ @tagName(tag))) {
                     const hook = @field(V, "enter_" ++ @tagName(tag));
+                    if (comptime tag == .class) {
+                        return unwrapAction(hook(visitor, ctx.tree.classOf(node), index, ctx));
+                    }
                     return unwrapAction(hook(visitor, node, index, ctx));
                 }
                 return .proceed;
@@ -211,7 +217,11 @@ pub const dispatch = struct {
         switch (data) {
             inline else => |node, tag| {
                 if (comptime @hasDecl(V, "exit_" ++ @tagName(tag))) {
-                    @field(V, "exit_" ++ @tagName(tag))(visitor, node, index, ctx);
+                    if (comptime tag == .class) {
+                        @field(V, "exit_" ++ @tagName(tag))(visitor, ctx.tree.classOf(node), index, ctx);
+                    } else {
+                        @field(V, "exit_" ++ @tagName(tag))(visitor, node, index, ctx);
+                    }
                 }
             },
         }
@@ -242,7 +252,7 @@ fn validateHooks(comptime V: type) void {
                 "': no field '" ++ node_name ++ "' exists in ast.NodeData");
         }
 
-        const expected = @FieldType(ast.NodeData, node_name);
+        const expected = ast.Payload(@field(std.meta.Tag(ast.NodeData), node_name));
         const hook_fn_params = @typeInfo(@TypeOf(@field(V, name))).@"fn".params;
 
         if (hook_fn_params.len >= 3) {

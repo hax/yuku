@@ -118,7 +118,7 @@ pub fn parseClassDecorated(
 
     const body = try parseClassBody(parser) orelse return null;
 
-    return try parser.tree.addNode(.{ .class = .{
+    return try parser.tree.addClass(.{
         .type = class_type,
         .decorators = decorators,
         .id = id,
@@ -129,7 +129,7 @@ pub fn parseClassDecorated(
         .implements = implements,
         .declare = opts.is_declare,
         .abstract = is_abstract,
-    } }, .{ .start = start, .end = parser.tree.span(body).end });
+    }, .{ .start = start, .end = parser.tree.span(body).end });
 }
 
 // `abstract` is a contextual keyword
