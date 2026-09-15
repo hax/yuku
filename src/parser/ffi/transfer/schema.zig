@@ -291,7 +291,8 @@ comptime {
     @setEvalBranchQuota(100_000);
     for (@typeInfo(@TypeOf(fields)).@"struct".field_names) |tag| {
         std.debug.assert(@hasField(ast.NodeData, tag));
-        const T = @FieldType(ast.NodeData, tag);
+        // side-stored payloads describe the struct they pack as
+        const T = ast.Payload(@field(ast.NodeTag, tag));
         for (@typeInfo(@TypeOf(@field(fields, tag))).@"struct".field_names) |name| {
             const Child = @FieldType(T, name);
             std.debug.assert(Child == ast.NodeIndex or Child == ast.IndexRange);

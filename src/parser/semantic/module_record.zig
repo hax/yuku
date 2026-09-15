@@ -320,8 +320,12 @@ const Collector = struct {
                     try self.patternNames(id, type_only);
                 }
             },
-            inline .function, .class => |decl| {
+            .function => |decl| {
                 if (decl.id != .null) try self.exportLocal(decl.id, type_only);
+            },
+            .class => |ref| {
+                const cls = self.tree.classOf(ref);
+                if (cls.id != .null) try self.exportLocal(cls.id, type_only);
             },
             inline .ts_type_alias_declaration, .ts_interface_declaration => |decl| {
                 try self.exportLocal(decl.id, true);
@@ -394,7 +398,11 @@ const Collector = struct {
     ) Allocator.Error!void {
         const declaration = self.tree.data(decl.declaration);
         const symbol: SymbolId = switch (declaration) {
-            inline .function, .class => |d| if (d.id != .null) self.bindingSymbol(d.id) else .none,
+            .function => |d| if (d.id != .null) self.bindingSymbol(d.id) else .none,
+            .class => |ref| if (self.tree.classOf(ref).id != .null)
+                self.bindingSymbol(self.tree.classOf(ref).id)
+            else
+                .none,
             .ts_interface_declaration => |d| self.bindingSymbol(d.id),
             .identifier_reference => |id| self.moduleBinding(id.name),
             else => .none,

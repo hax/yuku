@@ -190,7 +190,7 @@ fn refPosition(
         }
         if (!in_type_position) return .{};
         // an expression in a type sits in a computed key
-        if (tree.data(parent).isExpression()) {
+        if (tree.data(parent).isExpression(tree)) {
             child = parent;
             continue;
         }
