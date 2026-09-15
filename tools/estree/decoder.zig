@@ -1926,11 +1926,11 @@ fn u32IndexOf(comptime T: type, comptime field: []const u8) u32 {
 }
 
 fn flagBit(comptime T: type, comptime field: []const u8) u32 {
-    return rt.flagBitForField(T, fieldIdx(T, field));
+    return rt.flagBitForFieldDeep(T, field);
 }
 
 fn flagMask(comptime T: type, comptime field: []const u8) u32 {
-    return flagMaskAt(T, fieldIdx(T, field));
+    return @as(u32, 1) << @intCast(rt.flagBitForFieldDeep(T, field));
 }
 
 fn flagMaskAt(comptime T: type, comptime i: usize) u32 {

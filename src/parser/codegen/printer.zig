@@ -1796,28 +1796,29 @@ const Printer = struct {
     }
 
     fn emit_property_definition(self: *Self, p: *const ast.PropertyDefinition) Error!void {
-        if (self.options.strip) if (p.declare or p.abstract) return;
+        const mods = p.modifiers;
+        if (self.options.strip) if (mods.declare or mods.abstract) return;
         try self.printDecorators(p.decorators);
         try self.hoistKeyComments(p.key);
         defer self.skip_leading_of = .null;
         if (!self.options.strip) {
-            if (p.declare) try self.writeStr("declare ");
-            if (p.accessibility != .none) {
-                try self.writeStr(p.accessibility.toString());
+            if (mods.declare) try self.writeStr("declare ");
+            if (mods.accessibility != .none) {
+                try self.writeStr(mods.accessibility.toString());
                 try self.writeByte(' ');
             }
         }
         if (p.static) try self.writeStr("static ");
         if (!self.options.strip) {
-            if (p.abstract) try self.writeStr("abstract ");
-            if (p.override) try self.writeStr("override ");
-            if (p.readonly) try self.writeStr("readonly ");
+            if (mods.abstract) try self.writeStr("abstract ");
+            if (mods.override) try self.writeStr("override ");
+            if (mods.readonly) try self.writeStr("readonly ");
         }
-        if (p.accessor) try self.writeStr("accessor ");
+        if (mods.accessor) try self.writeStr("accessor ");
         try self.printClassKey(p.key, p.computed, p.static, true);
         if (!self.options.strip) {
-            if (p.optional) try self.writeByte('?');
-            if (p.definite) try self.writeByte('!');
+            if (mods.optional) try self.writeByte('?');
+            if (mods.definite) try self.writeByte('!');
         }
         try self.emit(p.type_annotation);
         if (p.value != .null) {

@@ -701,15 +701,17 @@ fn parsePropertyDefinition(
         .value = value,
         .computed = computed,
         .static = mods.is_static,
-        .accessor = mods.is_accessor,
         .type_annotation = type_annotation,
-        .declare = mods.declare,
-        .override = mods.override,
-        .optional = optional,
-        .definite = definite,
-        .readonly = mods.readonly,
-        .abstract = mods.abstract,
-        .accessibility = mods.accessibility,
+        .modifiers = .{
+            .accessor = mods.is_accessor,
+            .declare = mods.declare,
+            .override = mods.override,
+            .optional = optional,
+            .definite = definite,
+            .readonly = mods.readonly,
+            .abstract = mods.abstract,
+            .accessibility = mods.accessibility,
+        },
     } }, .{ .start = elem_start, .end = end });
 }
 

@@ -186,6 +186,7 @@ pub fn flagBitCount(comptime T: type, comptime field_idx: usize) u8 {
     if (f.type == ?ast.Hashbang) return 1;
     if (comptime isEnumType(f.type)) return enumBitWidth(f.type);
     if (f.type == ast.NodeIndex or f.type == ast.IndexRange or f.type == ast.String) return 0;
+    if (comptime isPackedFlagSet(f.type)) return @bitSizeOf(f.type);
     @compileError("unsupported field type '" ++ @typeName(f.type) ++ "' in " ++ @typeName(T));
 }
 
@@ -198,6 +199,43 @@ pub fn flagBitForField(comptime T: type, comptime target: usize) u8 {
     }
 }
 
+/// True when `T` is a packed struct of bool/enum flags, stored inline in the
+/// node's flag word instead of as separate flag bits of the outer payload.
+pub fn isPackedFlagSet(comptime T: type) bool {
+    const info = @typeInfo(T);
+    if (info != .@"struct") return false;
+    const s = info.@"struct";
+    if (s.layout != .@"packed") return false;
+    for (s.fields) |sf| {
+        if (sf.type != bool and !isEnumType(sf.type)) return false;
+    }
+    return true;
+}
+
+/// First flag bit of field `target` within packed flag set `T`.
+pub fn packedFlagBitForField(comptime T: type, comptime target: usize) u8 {
+    comptime {
+        var bit: u8 = 0;
+        for (0..target) |i| bit += @bitSizeOf(std.meta.fields(T)[i].type);
+        return bit;
+    }
+}
+
+/// First flag bit of the flag field `name` of struct `T`, looking through
+/// packed flag sets like `PropertyDefinition.Modifiers`.
+pub fn flagBitForFieldDeep(comptime T: type, comptime name: []const u8) u8 {
+    comptime {
+        if (std.meta.fieldIndex(T, name)) |i| return flagBitForField(T, i);
+        for (std.meta.fields(T), 0..) |f, i| {
+            if (!isPackedFlagSet(f.type)) continue;
+            if (std.meta.fieldIndex(f.type, name)) |j| {
+                return flagBitForField(T, i) + packedFlagBitForField(f.type, j);
+            }
+        }
+        @compileError("flag field '" ++ name ++ "' not found in " ++ @typeName(T));
+    }
+}
+
 /// The u32 slots consumed by field `field_idx` of struct `T`. The first two IndexRanges
 /// take one slot, later ones two.
 pub fn fieldU32Count(comptime T: type, comptime field_idx: usize) u8 {
@@ -207,6 +245,7 @@ pub fn fieldU32Count(comptime T: type, comptime field_idx: usize) u8 {
     if (f.type == ast.String) return 2;
     if (f.type == ?ast.Hashbang) return 2;
     if (f.type == bool or f.type == ?ast.ImportPhase or comptime isEnumType(f.type)) return 0;
+    if (comptime isPackedFlagSet(f.type)) return 0;
     @compileError("unsupported field type '" ++ @typeName(f.type) ++ "' in " ++ @typeName(T));
 }
 
@@ -474,6 +513,9 @@ fn packPayload(n: *PackedNode, payload: anytype) void {
             setSlot(n, slot + 1, val.end);
         } else if (comptime isEnumType(f.type)) {
             setFlagBits(n, bit, @intFromEnum(val));
+        } else if (comptime isPackedFlagSet(f.type)) {
+            const Bits = std.meta.Int(.unsigned, @bitSizeOf(f.type));
+            setFlagBits(n, bit, @as(Bits, @bitCast(val)));
         } else if (f.type == ?ast.ImportPhase) {
             if (val) |v| {
                 setFlagBit(n, bit);
@@ -681,6 +723,12 @@ fn unpackPayload(comptime T: type, n: PackedNode, payload: *T) void {
             const mask: u16 = (@as(u16, 1) << @intCast(bits)) - 1;
             const v: u16 = (n.flags >> @intCast(bit)) & mask;
             @field(payload.*, f.name) = @enumFromInt(v);
+        } else if (comptime isPackedFlagSet(f.type)) {
+            const bits = comptime @bitSizeOf(f.type);
+            const mask: u16 = (@as(u16, 1) << @intCast(bits)) - 1;
+            const v: u16 = (n.flags >> @intCast(bit)) & mask;
+            const Bits = std.meta.Int(.unsigned, bits);
+            @field(payload.*, f.name) = @bitCast(@as(Bits, @intCast(v)));
         } else if (f.type == ?ast.ImportPhase) {
             const present = ((n.flags >> @intCast(bit)) & 1) == 1;
             if (present) {
