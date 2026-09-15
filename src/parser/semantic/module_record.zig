@@ -281,7 +281,8 @@ const Collector = struct {
             .function => |func| {
                 if (func.id != .null) try self.exportLocal(func.id, type_only);
             },
-            .class => |cls| {
+            .class => |ref| {
+                const cls = self.tree.classOf(ref);
                 if (cls.id != .null) try self.exportLocal(cls.id, type_only);
             },
             .ts_type_alias_declaration => |decl| try self.exportLocal(decl.id, true),
@@ -355,7 +356,10 @@ const Collector = struct {
     ) Allocator.Error!void {
         const symbol: SymbolId = switch (self.tree.data(decl.declaration)) {
             .function => |func| if (func.id != .null) self.bindingSymbol(func.id) else .none,
-            .class => |cls| if (cls.id != .null) self.bindingSymbol(cls.id) else .none,
+            .class => |ref| if (self.tree.classOf(ref).id != .null)
+                self.bindingSymbol(self.tree.classOf(ref).id)
+            else
+                .none,
             .identifier_reference => |id| self.moduleBinding(id.name),
             else => .none,
         };
