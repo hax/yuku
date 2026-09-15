@@ -827,6 +827,10 @@ const Printer = struct {
                     try self.out.writeStr(s);
                 } else if (comptime emittedByParent(tag)) {
                     std.debug.panic("codegen: {s} is emitted by its parent", .{@tagName(tag)});
+                } else if (comptime tag == .class) {
+                    // heritage-split payload: reassemble the logical Class
+                    const class = self.tree.classOf(node.*);
+                    try @call(.never_inline, emit_class, .{ self, &class, ctx });
                 } else {
                     const emitter = @field(Self, "emit_" ++ @tagName(tag));
                     if (comptime @typeInfo(@TypeOf(emitter)).@"fn".param_types.len == 3) {

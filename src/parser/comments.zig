@@ -132,6 +132,7 @@ pub fn attach(tree: *ast.Tree, list: []ast.Comment) Error!void {
         .spans = tree.nodes.items(.span),
         .data = tree.nodes.items(.data),
         .extras = tree.extras.items,
+        .tree = tree,
         .source = tree.source,
         .list = list,
         .index = &tree.comment_index,
@@ -155,6 +156,8 @@ const Walk = struct {
     spans: []const ast.Span,
     data: []const ast.NodeData,
     extras: []const ast.NodeIndex,
+    /// cold path only: reassembling a `class` payload's side-stored heritage
+    tree: *const ast.Tree,
     source: []const u8,
     list: []ast.Comment,
     cursor: u32 = 0,
@@ -211,19 +214,23 @@ const Walk = struct {
             // quasis are literal text, never comment hosts
             .template_literal => |t| try self.pushRange(t.expressions),
             .ts_template_literal_type => |t| try self.pushRange(t.types),
-            inline else => |payload| {
-                const T = @TypeOf(payload);
-                if (@typeInfo(T) != .@"struct") return;
-                const info = @typeInfo(T).@"struct";
-                inline for (info.field_names, info.field_types) |name, Field| {
-                    if (Field == ast.NodeIndex) {
-                        const child = @field(payload, name);
-                        if (child != .null) try self.pushChild(child);
-                    } else if (Field == ast.IndexRange) {
-                        try self.pushRange(@field(payload, name));
-                    }
-                }
-            },
+            // heritage-split payload: collect from the logical Class so
+            // that extends and implements children host comments too
+            .class => |core| try self.collectFields(ast.Class, self.tree.classOf(core)),
+            inline else => |payload| try self.collectFields(@TypeOf(payload), payload),
+        }
+    }
+
+    fn collectFields(self: *Walk, comptime T: type, payload: T) Error!void {
+        if (@typeInfo(T) != .@"struct") return;
+        const info = @typeInfo(T).@"struct";
+        inline for (info.field_names, info.field_types) |name, Field| {
+            if (Field == ast.NodeIndex) {
+                const child = @field(payload, name);
+                if (child != .null) try self.pushChild(child);
+            } else if (Field == ast.IndexRange) {
+                try self.pushRange(@field(payload, name));
+            }
         }
     }
 

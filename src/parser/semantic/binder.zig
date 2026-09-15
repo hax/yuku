@@ -1561,7 +1561,8 @@ fn typeParameterHidden(
         parent = node_parents[@backingInt(parent)];
     }) {
         switch (tree.data(parent)) {
-            .class => |cls| if (parent == owner and child == cls.super_class) return true,
+            .class => |core| if (parent == owner and core.heritage != .null and
+                child == tree.heritageOf(core.heritage).super_class) return true,
             inline .method_definition,
             .property_definition,
             .ts_property_signature,

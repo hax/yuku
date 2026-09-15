@@ -92,7 +92,9 @@ comptime {
     const slots_max = @typeInfo(@FieldType(PackedNode, "slots")).array.len;
     const flag_bits_max = @bitSizeOf(@FieldType(PackedNode, "flags"));
     const info = @typeInfo(ast.NodeData).@"union";
-    for (info.field_names, info.field_types) |name, T| {
+    for (info.field_names) |name| {
+        // heritage-split payloads validate against the struct they pack as
+        const T = ast.Payload(@field(ast.NodeTag, name));
         if (@typeInfo(T) != .@"struct") continue;
         const end = layout(T, @typeInfo(T).@"struct".field_types.len);
         if (end.slot > slots_max) {
@@ -190,7 +192,7 @@ pub fn serializeInto(tree: *const ast.Tree, buf: []u8) usize {
 
     const nodes_out: [*]PackedNode = @ptrCast(@alignCast(buf.ptr + pos));
     for (tree.nodes.items(.data), tree.nodes.items(.span), 0..) |*data, span, i| {
-        nodes_out[i] = packNode(data, span);
+        nodes_out[i] = packNode(tree, data, span);
     }
     pos += tree.nodes.len * @sizeOf(PackedNode);
 
@@ -257,21 +259,32 @@ inline fn writeString(buf: []u8, pos: *usize, string: []const u8) void {
 fn assertPostOrder(tree: *const ast.Tree) void {
     for (tree.nodes.items(.data), 0..) |data, index| {
         switch (data) {
+            // heritage-split payload: assert the reassembled Class children
+            .class => |core| assertChildrenBefore(tree, ast.Class, tree.classOf(core), index),
             inline else => |payload| {
                 const T = @TypeOf(payload);
                 if (@typeInfo(T) == .@"struct") {
-                    const info = @typeInfo(T).@"struct";
-                    inline for (info.field_names, info.field_types) |name, Field| {
-                        if (Field == ast.NodeIndex) {
-                            assertChildBefore(@field(payload, name), index);
-                        } else if (Field == ast.IndexRange) {
-                            for (tree.extra(@field(payload, name))) |child| {
-                                assertChildBefore(child, index);
-                            }
-                        }
-                    }
+                    assertChildrenBefore(tree, T, payload, index);
                 }
             },
+        }
+    }
+}
+
+fn assertChildrenBefore(
+    tree: *const ast.Tree,
+    comptime T: type,
+    payload: T,
+    index: usize,
+) void {
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |name, Field| {
+        if (Field == ast.NodeIndex) {
+            assertChildBefore(@field(payload, name), index);
+        } else if (Field == ast.IndexRange) {
+            for (tree.extra(@field(payload, name))) |child| {
+                assertChildBefore(child, index);
+            }
         }
     }
 }
@@ -280,13 +293,19 @@ fn assertChildBefore(child: ast.NodeIndex, index: usize) void {
     if (child != .null) std.debug.assert(@backingInt(child) < index);
 }
 
-fn packNode(data: *const ast.NodeData, span: ast.Span) PackedNode {
+fn packNode(tree: *const ast.Tree, data: *const ast.NodeData, span: ast.Span) PackedNode {
     std.debug.assert(span.start <= span.end);
     var n: PackedNode = std.mem.zeroes(PackedNode);
     n.span_start = span.start;
     n.span_end = span.end;
     // by pointer, so no node copies the whole union
     switch (data.*) {
+        // heritage-split payload: pack the reassembled logical Class
+        .class => |*core| {
+            n.tag = @backingInt(ast.NodeTag.class);
+            const class = tree.classOf(core.*);
+            packPayload(&n, &class);
+        },
         inline else => |*payload, tag| {
             n.tag = @backingInt(tag);
             packPayload(&n, payload);
