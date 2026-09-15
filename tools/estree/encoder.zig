@@ -6,6 +6,13 @@ const meta = @import("meta.zig");
 
 const Writer = std.Io.Writer;
 
+/// Resolves a union field to the payload type consumers see. A `class`
+/// node's union slot holds the inline `ast.ClassCore`, but the wire packs
+/// the logical `ast.Class` with its heritage reassembled.
+fn payloadType(comptime name: []const u8) type {
+    return ast.Payload(@field(std.meta.Tag(ast.NodeData), name));
+}
+
 // generates encode.js, the inverse of decode.js
 pub fn generate(w: *Writer) !void {
     @setEvalBranchQuota(500_000);
@@ -252,7 +259,7 @@ fn writeNodeEncoders(w: *Writer) !void {
         if (comptime meta.isSpecial(field.name)) {
             try writeSpecialEncoder(w, field.name, tag);
         } else {
-            try writeGenericEncoder(w, field.name, tag, field.type);
+            try writeGenericEncoder(w, field.name, tag, payloadType(field.name));
         }
     }
 }

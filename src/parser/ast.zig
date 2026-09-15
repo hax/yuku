@@ -173,6 +173,11 @@ pub const Tree = struct {
     /// Extra data storage for variadic node children. Resolved through
     /// `tree.extra(range)`.
     extras: std.ArrayList(NodeIndex) = .empty,
+    /// Side-stored inheritance details of `class` nodes. A `class` node's
+    /// inline payload (`ClassCore`) holds a `ClassHeritageIndex` into this
+    /// array, or `.null` when the class has no `extends` or `implements`
+    /// clause. Resolved through `tree.heritageOf(ref)`.
+    class_heritages: std.ArrayList(ClassHeritage) = .empty,
     /// Diagnostics (errors, warnings, etc.) collected during parsing and analysis.
     diagnostics: std.ArrayList(Diagnostic) = .empty,
     /// Every comment in source order, each with its source span. Populated
@@ -273,6 +278,75 @@ pub const Tree = struct {
     pub inline fn extra(self: *const Tree, range: IndexRange) []const NodeIndex {
         std.debug.assert(range.start + range.len <= self.extras.items.len);
         return self.extras.items[range.start..][0..range.len];
+    }
+
+    /// Returns the side-stored heritage record for a `ClassHeritageIndex`.
+    pub inline fn heritageOf(self: *const Tree, ref: ClassHeritageIndex) ClassHeritage {
+        std.debug.assert(ref != .null);
+        std.debug.assert(@intFromEnum(ref) < self.class_heritages.items.len);
+        return self.class_heritages.items[@intFromEnum(ref)];
+    }
+
+    /// Reassembles the logical `Class` a consumer sees from a `class`
+    /// node's inline payload and its side-stored heritage record.
+    pub inline fn classOf(self: *const Tree, core: ClassCore) Class {
+        var class: Class = .{
+            .type = core.type,
+            .decorators = core.decorators,
+            .id = core.id,
+            .type_parameters = core.type_parameters,
+            .super_class = .null,
+            .body = core.body,
+            .abstract = core.abstract,
+            .declare = core.declare,
+        };
+        if (core.heritage != .null) {
+            const heritage = self.heritageOf(core.heritage);
+            class.super_class = heritage.super_class;
+            class.super_type_arguments = heritage.super_type_arguments;
+            class.implements = heritage.implements;
+        }
+        return class;
+    }
+
+    /// Splits a logical `Class` into the inline payload plus a side-stored
+    /// heritage record. No record is created for a class without `extends`
+    /// or `implements`, so plain classes cost no indirection.
+    pub inline fn splitClass(self: *Tree, class: Class) error{OutOfMemory}!ClassCore {
+        var core: ClassCore = .{
+            .type = class.type,
+            .decorators = class.decorators,
+            .id = class.id,
+            .type_parameters = class.type_parameters,
+            .body = class.body,
+            .abstract = class.abstract,
+            .declare = class.declare,
+        };
+        if (class.super_class != .null or
+            class.super_type_arguments != .null or
+            class.implements.len != 0)
+        {
+            std.debug.assert(self.class_heritages.items.len < std.math.maxInt(u32));
+            const ref: ClassHeritageIndex =
+                @enumFromInt(@as(u32, @intCast(self.class_heritages.items.len)));
+            try self.class_heritages.append(self.arena.allocator(), .{
+                .super_class = class.super_class,
+                .super_type_arguments = class.super_type_arguments,
+                .implements = class.implements,
+            });
+            core.heritage = ref;
+        }
+        return core;
+    }
+
+    /// Creates a new `class` node, side-storing its heritage record if it
+    /// has one. Returns the node index.
+    pub inline fn addClass(
+        self: *Tree,
+        class: Class,
+        node_span: Span,
+    ) error{OutOfMemory}!NodeIndex {
+        return self.addNode(.{ .class = try self.splitClass(class) }, node_span);
     }
 
     /// Replaces an existing node's data in-place.
@@ -383,6 +457,13 @@ pub const Tree = struct {
 ///
 /// See [AST reference](https://yuku.fyi/parser/ast).
 pub const NodeIndex = enum(u32) { null = std.math.maxInt(u32), _ };
+
+/// Index into the side-stored class heritage array (`Tree.class_heritages`).
+///
+/// A class pays for inheritance only when it uses it: the `extends` and
+/// `implements` details live out of the node union so that the inline
+/// `ClassCore` payload stays at 28 bytes, below the next-largest variants.
+pub const ClassHeritageIndex = enum(u32) { null = std.math.maxInt(u32), _ };
 
 /// Range of indices into the extra array for storing variadic node lists.
 pub const IndexRange = struct {
@@ -498,6 +579,54 @@ pub const Class = struct {
     abstract: bool = false,
     /// true for `declare class`.
     declare: bool = false,
+};
+
+/// The inline payload of a `class` node. Holds everything except the
+/// inheritance details, which are side-stored as a `ClassHeritage` record
+/// and reached through `heritage`. Use `tree.classOf(core)` to reassemble
+/// the logical `Class`.
+///
+/// Keeping the union slot at 28 bytes is what allows `NodeData` to shrink
+/// past the 40-byte `Class` it used to contain.
+pub const ClassCore = struct {
+    type: ClassType,
+    /// `decorator[]`
+    decorators: IndexRange,
+    /// `binding_identifier`. `.null` for anonymous class expressions.
+    id: NodeIndex,
+    /// `ts_type_parameter_declaration`. `.null` when the class has no
+    /// `<T, U>` parameters.
+    type_parameters: NodeIndex = .null,
+    /// `class_body`
+    body: NodeIndex,
+    /// Side-stored `extends` and `implements` details. `.null` when the
+    /// class has neither clause.
+    heritage: ClassHeritageIndex = .null,
+    /// true for `abstract class`.
+    abstract: bool = false,
+    /// true for `declare class`.
+    declare: bool = false,
+};
+
+/// The inheritance details of a class, side-stored in
+/// `Tree.class_heritages`.
+///
+/// ## Example
+/// ```ts
+/// class Foo<T> extends Base<T> implements I {}
+/// //                   ^^^^ super_class
+/// //                       ^^^ super_type_arguments
+/// //                                      ^ implements[0]
+/// ```
+pub const ClassHeritage = struct {
+    /// any expression. `.null` when the class has no `extends` clause.
+    super_class: NodeIndex,
+    /// `ts_type_parameter_instantiation`. `.null` when `extends` has no
+    /// `<T>` arguments.
+    super_type_arguments: NodeIndex = .null,
+    /// `ts_class_implements[]`. Empty when the class has no `implements`
+    /// clause.
+    implements: IndexRange = .empty,
 };
 
 /// The `{ ... }` body of a class, holding its members.
@@ -4072,7 +4201,7 @@ pub const NodeData = union(enum) {
     yield_expression: YieldExpression,
     meta_property: MetaProperty,
     decorator: Decorator,
-    class: Class,
+    class: ClassCore,
     class_body: ClassBody,
     method_definition: MethodDefinition,
     property_definition: PropertyDefinition,
@@ -4447,6 +4576,18 @@ pub const NodeData = union(enum) {
     }
 };
 
+/// The payload type a consumer sees for a node kind. A `class` node's
+/// union slot holds the inline `ClassCore`, but consumers see the logical
+/// `Class` reassembled with its side-stored heritage record, so generic
+/// machinery (visitors, serializers, code generators) must resolve the
+/// payload type through here instead of the union field.
+pub fn Payload(comptime tag: std.meta.Tag(NodeData)) type {
+    return switch (tag) {
+        .class => Class,
+        else => @FieldType(NodeData, @tagName(tag)),
+    };
+}
+
 pub const Node = struct {
     data: NodeData,
     span: Span,
@@ -4455,8 +4596,10 @@ pub const Node = struct {
 pub const NodeList = std.MultiArrayList(Node);
 
 comptime {
-    std.debug.assert(@sizeOf(NodeData) == 44);
-    std.debug.assert(@sizeOf(Node) == 52);
+    std.debug.assert(@sizeOf(NodeData) == 36);
+    std.debug.assert(@sizeOf(Node) == 44);
     std.debug.assert(@sizeOf(Class) == 40);
+    std.debug.assert(@sizeOf(ClassCore) == 28);
+    std.debug.assert(@sizeOf(ClassHeritage) == 16);
     std.debug.assert(@sizeOf(PropertyDefinition) == 32);
 }

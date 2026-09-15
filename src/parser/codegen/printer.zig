@@ -493,6 +493,10 @@ const Printer = struct {
             inline else => |*node, tag| {
                 if (comptime fixedString(tag)) |s| {
                     try self.writeStr(s);
+                } else if (comptime tag == .class) {
+                    // heritage-split payload: reassemble the logical Class
+                    const class = self.tree.classOf(node.*);
+                    try self.emit_class(&class);
                 } else {
                     const fn_name = "emit_" ++ @tagName(tag);
                     if (comptime @hasDecl(Self, fn_name)) {

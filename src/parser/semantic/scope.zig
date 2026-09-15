@@ -375,7 +375,7 @@ pub const ScopeTracker = struct {
         };
     }
 
-    fn isNamedClassExpression(cls: ast.Class) bool {
+    fn isNamedClassExpression(cls: ast.ClassCore) bool {
         return cls.type != .class_declaration and cls.id != .null;
     }
 
