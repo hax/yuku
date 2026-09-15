@@ -1403,13 +1403,45 @@ fn expand(comptime tag: []const u8, comptime T: type, comptime template: []const
         while (std.mem.findAny(u8, rest, "@$")) |at| {
             const end = std.mem.findNonePos(u8, rest, at + 1, "abcdefghijklmnopqrstuvwxyz_") orelse
                 rest.len;
-            const index = field(T, rest[at + 1 .. end]);
-            const value = if (rest[at] == '@') fieldValue(tag, T, index) else fieldRaw(T, index);
+            const name = rest[at + 1 .. end];
+            const value = if (rest[at] == '@') fieldValueDeep(tag, T, name) else fieldRawDeep(T, name);
             out = out ++ rest[0..at] ++ value;
             rest = rest[end..];
         }
         return out ++ rest;
     }
+}
+
+// flag fields may live in a packed flag set such as PropertyDefinition.Modifiers,
+// packed inline in the node's flag word after the outer field's flags
+fn fieldValueDeep(comptime tag: []const u8, comptime T: type, comptime name: []const u8) []const u8 {
+    if (std.meta.fieldIndex(T, name)) |i| return fieldValue(tag, T, i);
+    inline for (@typeInfo(T).@"struct".field_types, 0..) |Field, i| {
+        if (comptime !rt.isPackedFlagSet(Field)) continue;
+        if (comptime std.meta.fieldIndex(Field, name)) |j| {
+            return packedFlagValue(T, Field, i, j);
+        }
+    }
+    @compileError("field '" ++ name ++ "' not found in " ++ @typeName(T));
+}
+
+fn packedFlagValue(
+    comptime T: type,
+    comptime P: type,
+    comptime outer: usize,
+    comptime inner: usize,
+) []const u8 {
+    const F = @typeInfo(P).@"struct".field_types[inner];
+    const bit = rt.layout(T, outer).bit + rt.packedFlagBitForField(P, inner);
+    if (F == bool) return "!!(flags & " ++ std.fmt.comptimePrint("{d}", .{@as(u32, 1) << bit}) ++ ")";
+    if (@typeInfo(F) == .@"enum") {
+        return tableName(F) ++ "[" ++ flagBits(bit, rt.enumBitWidth(F)) ++ "]";
+    }
+    @compileError("unsupported packed field type in decoder: " ++ @typeName(F));
+}
+
+fn fieldRawDeep(comptime T: type, comptime name: []const u8) []const u8 {
+    return fieldRaw(T, field(T, name));
 }
 
 fn fieldValue(comptime tag: []const u8, comptime T: type, comptime index: usize) []const u8 {

@@ -322,7 +322,7 @@ const Printer = struct {
             .class => |c| c.declare,
             .method_definition => |m| m.abstract or
                 self.nodeData(m.value).function.body == .null,
-            .property_definition => |d| d.declare or d.abstract,
+            .property_definition => |d| d.modifiers.declare or d.modifiers.abstract,
             .import_declaration => |*d| isTypeOnlyImport(self.tree, d),
             .export_named_declaration => |d| if (d.declaration != .null)
                 d.export_kind == .type or self.stripsToNothing(d.declaration)
@@ -2101,27 +2101,28 @@ const Printer = struct {
     }
 
     fn emit_property_definition(self: *Self, p: *const ast.PropertyDefinition) Error!void {
-        if (self.options.strip) if (p.declare or p.abstract) return;
+        const mods = p.modifiers;
+        if (self.options.strip) if (mods.declare or mods.abstract) return;
         try self.printDecorators(p.decorators);
         try self.hoistKeyComments(p.key);
         defer self.skip_leading_of = .null;
         if (!self.options.strip) {
-            if (p.declare) try self.out.writeStr("declare ");
-            try self.printAccessibility(p.accessibility);
+            if (mods.declare) try self.out.writeStr("declare ");
+            try self.printAccessibility(mods.accessibility);
         }
         if (p.static) try self.out.writeStr("static ");
         if (!self.options.strip) {
-            if (p.abstract) try self.out.writeStr("abstract ");
-            if (p.override) try self.out.writeStr("override ");
-            if (p.readonly) try self.out.writeStr("readonly ");
+            if (mods.abstract) try self.out.writeStr("abstract ");
+            if (mods.override) try self.out.writeStr("override ");
+            if (mods.readonly) try self.out.writeStr("readonly ");
         }
-        if (p.accessor) try self.out.writeStr("accessor ");
-        if (!self.options.strip and p.definite) self.defer_trailing_of = p.key;
+        if (mods.accessor) try self.out.writeStr("accessor ");
+        if (!self.options.strip and mods.definite) self.defer_trailing_of = p.key;
         try self.printClassKey(p.key, p.computed, p.static, true);
         self.defer_trailing_of = .null;
         if (!self.options.strip) {
-            if (p.optional) try self.out.writeByte('?');
-            if (p.definite) try self.out.writeByte('!');
+            if (mods.optional) try self.out.writeByte('?');
+            if (mods.definite) try self.out.writeByte('!');
         }
         try self.emitOwedComments();
         try self.emit(p.type_annotation);
