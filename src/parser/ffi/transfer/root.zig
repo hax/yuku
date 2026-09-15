@@ -93,7 +93,9 @@ comptime {
     const slots_max = @typeInfo(@FieldType(PackedNode, "slots")).array.len;
     const flag_bits_max = @bitSizeOf(@FieldType(PackedNode, "flags"));
     const info = @typeInfo(ast.NodeData).@"union";
-    for (info.field_names, info.field_types) |name, T| {
+    for (info.field_names) |name| {
+        // side-stored payloads validate against the struct they pack as
+        const T = ast.Payload(@field(ast.NodeTag, name));
         if (@typeInfo(T) != .@"struct") continue;
         const end = layout(T, @typeInfo(T).@"struct".field_types.len);
         if (end.slot > slots_max) {
@@ -193,7 +195,7 @@ pub fn serializeInto(
     if (sections.nodes) {
         const nodes_out: [*]PackedNode = @ptrCast(@alignCast(buf.ptr + pos));
         for (tree.nodes.items(.data), tree.nodes.items(.span), nodes_out) |*data, span, *out| {
-            packNode(out, data, span, offsets);
+            packNode(out, tree, data, span, offsets);
         }
         pos += tree.nodes.len * @sizeOf(PackedNode);
         writeBytes(buf, &pos, std.mem.sliceAsBytes(tree.extras.items));
@@ -355,21 +357,24 @@ inline fn writeString(buf: []u8, pos: *usize, string: []const u8) void {
 fn assertPostOrder(tree: *const ast.Tree) void {
     for (tree.nodes.items(.data), 0..) |data, index| {
         switch (data) {
-            inline else => |payload| {
-                const T = @TypeOf(payload);
-                if (@typeInfo(T) == .@"struct") {
-                    const info = @typeInfo(T).@"struct";
-                    inline for (info.field_names, info.field_types) |name, Field| {
-                        if (Field == ast.NodeIndex) {
-                            assertChildBefore(@field(payload, name), index);
-                        } else if (Field == ast.IndexRange) {
-                            for (tree.extra(@field(payload, name))) |child| {
-                                assertChildBefore(child, index);
-                            }
-                        }
-                    }
-                }
-            },
+            // side-stored payload: the union slot holds a ClassIndex
+            .class => |ref| assertStructPostOrder(tree, tree.classOf(ref), index),
+            inline else => |payload| assertStructPostOrder(tree, payload, index),
+        }
+    }
+}
+
+fn assertStructPostOrder(tree: *const ast.Tree, payload: anytype, index: usize) void {
+    const T = @TypeOf(payload);
+    if (@typeInfo(T) != .@"struct") return;
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |name, Field| {
+        if (Field == ast.NodeIndex) {
+            assertChildBefore(@field(payload, name), index);
+        } else if (Field == ast.IndexRange) {
+            for (tree.extra(@field(payload, name))) |child| {
+                assertChildBefore(child, index);
+            }
         }
     }
 }
@@ -380,6 +385,7 @@ fn assertChildBefore(child: ast.NodeIndex, index: usize) void {
 
 fn packNode(
     n: *PackedNode,
+    tree: *const ast.Tree,
     data: *const ast.NodeData,
     span: ast.Span,
     offsets: *const utf16.Offsets,
@@ -394,6 +400,10 @@ fn packNode(
     };
     // by pointer, so no node copies the whole union
     switch (data.*) {
+        // side-stored payload: pack the struct the slot points at
+        .class => |*ref| {
+            packPayload(n, &tree.classes.items[@backingInt(ref.*)], offsets);
+        },
         inline else => |*payload| packPayload(n, payload, offsets),
     }
 }
@@ -470,6 +480,7 @@ pub fn unpack(gpa: std.mem.Allocator, tree: *ast.Tree, encoded: Encoded) Error!v
     try tree.extras.appendSlice(arena, @ptrCast(encoded.extras));
     try tree.nodes.ensureTotalCapacity(arena, encoded.nodes.len);
     var reader: Reader = .{
+        .tree = tree,
         .nodes = encoded.nodes,
         .extras = tree.extras.items,
         .pool = encoded.pool,
@@ -498,6 +509,7 @@ pub fn unpack(gpa: std.mem.Allocator, tree: *ast.Tree, encoded: Encoded) Error!v
 }
 
 const Reader = struct {
+    tree: *ast.Tree,
     nodes: []const PackedNode,
     extras: []const ast.NodeIndex,
     pool: []align(1) const u16,
@@ -509,6 +521,16 @@ const Reader = struct {
 
     fn node(reader: *Reader, n: *const PackedNode, index: u32) Error!ast.NodeData {
         switch (try enumOf(Tag, n.tag)) {
+            .class => {
+                // side-stored payload: the wire packs the full Class
+                const class = try reader.payload(ast.Class, "class", n, index);
+                const tree = reader.tree;
+                std.debug.assert(tree.classes.items.len < std.math.maxInt(u32));
+                const ref: ast.ClassIndex =
+                    @fromBackingInt(@as(u32, @intCast(tree.classes.items.len)));
+                try tree.classes.append(tree.allocator(), class);
+                return .{ .class = ref };
+            },
             inline else => |known| {
                 const name = @tagName(known);
                 const T = @FieldType(ast.NodeData, name);
