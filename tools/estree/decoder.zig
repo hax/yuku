@@ -569,8 +569,8 @@ fn writeDecode(w: *Writer) !void {
     const Node = rt.PackedNode;
     const Comment = rt.PackedComment;
     const Params = ast.FormalParameters;
-    const params_items = comptime rt.layout(Params, field(Params, "items")).slot + slots_word;
-    const params_rest = comptime rt.layout(Params, field(Params, "rest")).slot + slots_word;
+    const params_items = comptime rt.layout(Params, field(Params, "items").outer).slot + slots_word;
+    const params_rest = comptime rt.layout(Params, field(Params, "rest").outer).slot + slots_word;
     comptime {
         std.debug.assert(@offsetOf(Node, "tag") == 0);
         std.debug.assert(@offsetOf(Node, "flags") == 2);
@@ -1438,10 +1438,11 @@ fn nodeBody(comptime tag: []const u8) []const u8 {
         if (@typeInfo(T) == .@"struct") {
             for (@typeInfo(T).@"struct".field_names, 0..) |name, i| {
                 const key = estreeField(tag, name);
+                const ref: FieldRef = .{ .outer = i, .inner = null };
                 if (isTsField(tag, name)) {
-                    ts = ts ++ ", " ++ key ++ ": " ++ fieldValue(tag, T, i);
+                    ts = ts ++ ", " ++ key ++ ": " ++ fieldValue(tag, T, ref);
                 } else {
-                    fields = fields ++ ", " ++ key ++ ": " ++ fieldValue(tag, T, i);
+                    fields = fields ++ ", " ++ key ++ ": " ++ fieldValue(tag, T, ref);
                 }
             }
         }
@@ -1475,12 +1476,19 @@ fn expand(comptime tag: []const u8, comptime T: type, comptime template: []const
     }
 }
 
-fn fieldValue(comptime tag: []const u8, comptime T: type, comptime index: usize) []const u8 {
-    const name = @typeInfo(T).@"struct".field_names[index];
-    const F = @typeInfo(T).@"struct".field_types[index];
-    const at = rt.layout(T, index);
+fn fieldValue(comptime tag: []const u8, comptime T: type, comptime ref: FieldRef) []const u8 {
+    const name = @typeInfo(T).@"struct".field_names[ref.outer];
+    const F = @typeInfo(T).@"struct".field_types[ref.outer];
+    const at = rt.layout(T, ref.outer);
     const s = slotName(at.slot);
     const e = slotName(at.slot + 1);
+    if (ref.inner) |j| {
+        // a flag packed inside a flag set field, inline in the node flag word
+        const SF = @typeInfo(F).@"struct".field_types[j];
+        const bit = at.bit + rt.packedFlagBitForField(F, j);
+        if (SF == bool) return std.fmt.comptimePrint("!!(flags & {d})", .{@as(u32, 1) << bit});
+        return tableName(SF) ++ "[" ++ flagBits(bit, rt.enumBitWidth(SF)) ++ "]";
+    }
     const flag = std.fmt.comptimePrint("(flags & {d})", .{1 << at.bit});
     if (F == ast.NodeIndex) {
         if (eql(name, "params")) return s ++ " !== NULL ? fnParams(" ++ s ++ ") : []";
@@ -1504,10 +1512,16 @@ fn fieldValue(comptime tag: []const u8, comptime T: type, comptime index: usize)
     @compileError("unsupported field type in decoder: " ++ @typeName(F));
 }
 
-fn fieldRaw(comptime T: type, comptime index: usize) []const u8 {
-    const F = @typeInfo(T).@"struct".field_types[index];
-    const at = rt.layout(T, index);
+fn fieldRaw(comptime T: type, comptime ref: FieldRef) []const u8 {
+    const F = @typeInfo(T).@"struct".field_types[ref.outer];
+    const at = rt.layout(T, ref.outer);
     if (F == ast.NodeIndex or F == ast.String) return slotName(at.slot);
+    if (ref.inner) |j| {
+        // a flag packed inside a flag set field
+        const SF = @typeInfo(F).@"struct".field_types[j];
+        const width = if (SF == bool) 1 else rt.enumBitWidth(SF);
+        return "(" ++ flagBits(at.bit + rt.packedFlagBitForField(F, j), width) ++ ")";
+    }
     return "(" ++ flagBits(at.bit, rt.enumBitWidth(F)) ++ ")";
 }
 
@@ -1521,9 +1535,19 @@ fn slotName(comptime slot: u8) []const u8 {
     return std.fmt.comptimePrint("f{d}", .{slot + 1});
 }
 
-fn field(comptime T: type, comptime name: []const u8) usize {
-    return std.meta.fieldIndex(T, name) orelse
+/// A field of `T`, where `inner` set means a flag inside the packed flag
+/// set at `outer`, such as `PropertyDefinition.Modifiers`.
+const FieldRef = struct { outer: usize, inner: ?usize };
+
+fn field(comptime T: type, comptime name: []const u8) FieldRef {
+    comptime {
+        if (std.meta.fieldIndex(T, name)) |i| return .{ .outer = i, .inner = null };
+        for (@typeInfo(T).@"struct".field_types, 0..) |F, i| {
+            if (!rt.isPackedFlagSet(F)) continue;
+            if (std.meta.fieldIndex(F, name)) |j| return .{ .outer = i, .inner = j };
+        }
         @compileError("field '" ++ name ++ "' not found in " ++ @typeName(T));
+    }
 }
 
 pub fn word(comptime T: type, comptime name: []const u8) u32 {
