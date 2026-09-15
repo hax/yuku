@@ -102,7 +102,8 @@ fn writeTables(w: *Writer) !void {
 fn isEncodedEnum(comptime E: type) bool {
     comptime {
         @setEvalBranchQuota(1_000_000);
-        for (node_data.field_types) |T| {
+        for (node_data.field_names) |tag| {
+            const T = decoder.payloadType(tag);
             for (@typeInfo(T).@"struct".field_types) |Field| {
                 if (Field == E) return true;
                 if (Field == ?E) return true;
@@ -388,7 +389,7 @@ fn writeRuntime(w: *Writer) !void {
 
 fn writeEncoder(w: *Writer, comptime tag: []const u8, comptime index: usize) !void {
     @setEvalBranchQuota(1_000_000);
-    const T = @FieldType(ast.NodeData, tag);
+    const T = decoder.payloadType(tag);
     const info = @typeInfo(T).@"struct";
     const special = comptime decoder.specialOf(tag);
     const encode: decoder.Encode = comptime if (special) |s| s.encode else .{};
@@ -668,8 +669,9 @@ fn writeDispatch(w: *Writer) !void {
     @setEvalBranchQuota(10_000_000);
     var written: [256][]const u8 = undefined;
     var written_len: usize = 0;
-    inline for (node_data.field_names, node_data.field_types) |tag, T| {
+    inline for (node_data.field_names) |tag| {
         if (comptime decoder.typesOf(tag).len == 0) continue;
+        const T = comptime decoder.payloadType(tag);
         const info = @typeInfo(T).@"struct";
         inline for (info.field_names, info.field_types) |name, Field| {
             if (Field != ast.NodeIndex and Field != ast.IndexRange) continue;
