@@ -642,15 +642,17 @@ fn parsePropertyDefinition(
         .value = value,
         .computed = computed,
         .static = modifiers.is_static,
-        .accessor = modifiers.is_accessor,
         .type_annotation = type_annotation,
-        .declare = modifiers.declare,
-        .override = modifiers.override,
-        .optional = modifiers.optional,
-        .definite = modifiers.definite,
-        .readonly = modifiers.readonly,
-        .abstract = modifiers.abstract,
-        .accessibility = modifiers.accessibility,
+        .modifiers = .{
+            .accessor = modifiers.is_accessor,
+            .declare = modifiers.declare,
+            .override = modifiers.override,
+            .optional = modifiers.optional,
+            .definite = modifiers.definite,
+            .readonly = modifiers.readonly,
+            .abstract = modifiers.abstract,
+            .accessibility = modifiers.accessibility,
+        },
     } }, .{ .start = element_start, .end = end });
 }
 
