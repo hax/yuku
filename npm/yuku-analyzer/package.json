@@ -17,6 +17,7 @@
     "module.js",
     "walk.js",
     "wire-walk.js",
+    "wire-read.js",
     "binding.js",
     "decode.js"
   ],

@@ -6,6 +6,7 @@
 // costs for every node it touches. The wire walk touches only typed
 // arrays for the nodes nobody listens to.
 import { ALIAS_GROUPS } from "yuku-ast";
+import { wireWords } from "./wire-read.js";
 
 // ESTree type name per wire tag, in the NodeData union's declaration
 // order (src/parser/ast.zig). null where the name depends on the node's
@@ -153,6 +154,12 @@ function visitChild(u32, extraBase, child, visit) {
   }
 }
 
+// the ESTree type name of the node at a wire index, null for pseudo tags
+export function wireTypeOf(view, index) {
+  const word = wireWords(view)[index * 11 + 11];
+  return wireTypeName(word & 255, word >>> 16, view.isTs);
+}
+
 // one CSR child index per module, built on demand
 const wireIndexCache = new WeakMap();
 
@@ -160,8 +167,7 @@ function wireIndexOf(module) {
   let cached = wireIndexCache.get(module);
   if (cached !== undefined) return cached;
   const view = module._wire();
-  const buffer = view.buffer;
-  const u32 = new Int32Array(buffer, 0, buffer.byteLength >> 2);
+  const u32 = wireWords(view);
   const nodeCount = u32[0];
   const extraBase = 11 + nodeCount * 11;
   const offsets = new Int32Array(nodeCount + 1);
@@ -234,16 +240,19 @@ class WireWalkContext {
     this._rootIndex = -1;
     this._skip = false;
     this._stopped = false;
+    this._deliverIndex = false;
   }
   get node() {
     return this._node;
   }
   // the walked parent, null at the walk root even when the root has a
-  // structural parent in the module
+  // structural parent in the module. In an index walk it is the parent
+  // index instead, -1 at the root
   get parent() {
     const index = this._index;
-    if (index < 0 || index === this._rootIndex) return null;
+    if (index < 0 || index === this._rootIndex) return this._deliverIndex ? -1 : null;
     const parent = this._view.parentIndex(index);
+    if (this._deliverIndex) return parent;
     return parent < 0 ? null : this._view.nodeOf(parent);
   }
   skip() {
@@ -267,13 +276,28 @@ class WireWalkContext {
 }
 
 export function walkWire(module, visitors, root) {
+  walkWireImpl(module, visitors, root, false);
+}
+
+// The index-delivering twin of walkWire: handlers receive wire indexes
+// instead of decoded nodes, so a walk over them materializes nothing.
+export function walkWireIndexes(module, visitors, root) {
+  walkWireImpl(module, visitors, root, true);
+}
+
+function walkWireImpl(module, visitors, root, deliverIndex) {
   if (visitors === null || typeof visitors !== "object") {
     throw new TypeError("walkWire: visitors must be an object");
   }
   const wireIndex = wireIndexOf(module);
   const { view, u32, isTs, offsets, children } = wireIndex;
-  const rootIndex = root === undefined ? wireIndex.programIndex : view.indexOf(root);
-  if (rootIndex === undefined) {
+  const rootIndex =
+    root === undefined
+      ? wireIndex.programIndex
+      : typeof root === "number"
+        ? root
+        : view.indexOf(root);
+  if (rootIndex === undefined || rootIndex < 0 || rootIndex >= u32[0]) {
     throw new TypeError("walkWire: root does not belong to this module's AST");
   }
   const rootWord = u32[rootIndex * 11 + 11];
@@ -285,6 +309,7 @@ export function walkWire(module, visitors, root) {
   const nodeOf = view.nodeOf;
   const ctx = new WireWalkContext(module, view);
   ctx._rootIndex = rootIndex;
+  ctx._deliverIndex = deliverIndex;
 
   // entered frames. Node index, next child position, handler entry.
   let stackIndex = new Int32Array(64);
@@ -315,7 +340,7 @@ export function walkWire(module, visitors, root) {
     const entry = handlersOf(i);
     let skip = false;
     if (d.enter !== null || (entry !== null && entry.enter.length !== 0)) {
-      const node = nodeOf(i);
+      const node = deliverIndex ? i : nodeOf(i);
       ctx._node = node;
       ctx._index = i;
       if (d.enter !== null) {
@@ -354,7 +379,7 @@ export function walkWire(module, visitors, root) {
     stackEntry[depth] = undefined;
     if (d.leave !== null || (entry !== null && entry.leave.length !== 0)) {
       const i = stackIndex[depth];
-      const node = nodeOf(i);
+      const node = deliverIndex ? i : nodeOf(i);
       ctx._node = node;
       ctx._index = i;
       if (entry !== null) {

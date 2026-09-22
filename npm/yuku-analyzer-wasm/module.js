@@ -79,6 +79,13 @@ class Symbol {
     for (let i = 0; i < out.length; i++) out[i] = symbol.declNode(this.id, i);
     return out;
   }
+  // the declaration nodes by wire index, without decoding them
+  get declarationIndexes() {
+    const { symbol } = this.#sem;
+    const out = Array.from({ length: symbol.declCount(this.id) });
+    for (let i = 0; i < out.length; i++) out[i] = symbol.declNodeIndex(this.id, i);
+    return out;
+  }
   get references() {
     return this.module._referencesOfSymbol(this.id);
   }
@@ -336,9 +343,19 @@ export class Module {
     return index === undefined ? null : this._symbolByIndex(index);
   }
 
+  // the index-native twin of symbolOf, for wire walks
+  symbolOfIndex(index) {
+    return this._symbolByIndex(index);
+  }
+
   referenceOf(node) {
     const index = this.#r.indexOf(node);
     return index === undefined ? null : this._referenceByIndex(index);
+  }
+
+  // the index-native twin of referenceOf, for wire walks
+  referenceOfIndex(index) {
+    return this._referenceByIndex(index);
   }
 
   scopeOf(node) {
@@ -440,17 +457,26 @@ export class Module {
     return walkModuleAsync(this, visitor, root);
   }
 
-  // the read-only wire view behind walkWire (wire-walk.js). The buffer is
-  // otherwise visible only inside decode's closure
+  // the read-only wire view behind walkWire (wire-walk.js) and the field
+  // readers (wire-read.js). The buffer is otherwise visible only inside
+  // decode's closure
   _wire() {
-    return (this.#wireView ??= {
-      buffer: this.#wireBuffer,
-      nodeOf: this.#r.nodeOf,
-      indexOf: this.#r.indexOf,
-      parentIndex: this.#r.parentIndex,
-      startOf: this.#r.startOf,
-      endOf: this.#r.endOf,
-    });
+    return (this.#wireView ??= (() => {
+      const words = new Int32Array(this.#wireBuffer, 0, this.#wireBuffer.byteLength >> 2);
+      return {
+        buffer: this.#wireBuffer,
+        source: this.source,
+        nodeCount: words[0],
+        programIndex: words[8],
+        isTs: (words[9] & 1) !== 0,
+        nodeOf: this.#r.nodeOf,
+        indexOf: this.#r.indexOf,
+        parentIndex: this.#r.parentIndex,
+        startOf: this.#r.startOf,
+        endOf: this.#r.endOf,
+        str: this.#r.str,
+      };
+    })());
   }
 
   findAll(types) {
