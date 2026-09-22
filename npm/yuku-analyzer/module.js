@@ -240,6 +240,8 @@ class SemanticWalkContext extends WalkContext {
 export class Module {
   #r;
   #sem;
+  #wireBuffer;
+  #wireView = null;
   #scopes = null;
   #bindings = null;
   #references = null;
@@ -260,11 +262,8 @@ export class Module {
     this.analyzer = analyzer;
     this.path = path;
     this.source = typeof source === "string" ? source : _dec.decode(source);
-    this.#r = decode(
-      core.analyze(this.source, fileOptions({ ...options, path })),
-      this.source,
-      path,
-    );
+    this.#wireBuffer = core.analyze(this.source, fileOptions({ ...options, path }));
+    this.#r = decode(this.#wireBuffer, this.source, path);
     this.#sem = this.#r.semantic;
   }
 
@@ -441,6 +440,19 @@ export class Module {
 
   walkAsync(visitors, root) {
     return _walkAsync(root ?? this.ast, visitors, undefined, new SemanticWalkContext(this));
+  }
+
+  // the read-only wire view behind walkWire (wire-walk.js). The buffer is
+  // otherwise visible only inside decode's closure
+  _wire() {
+    return (this.#wireView ??= {
+      buffer: this.#wireBuffer,
+      nodeOf: this.#r.nodeOf,
+      indexOf: this.#r.indexOf,
+      parentIndex: this.#r.parentIndex,
+      startOf: this.#r.startOf,
+      endOf: this.#r.endOf,
+    });
   }
 
   findAll(types) {

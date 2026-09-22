@@ -18,6 +18,7 @@
     "index.d.ts",
     "analyzer.js",
     "module.js",
+    "wire-walk.js",
     "decode.js"
   ],
   "keywords": [
