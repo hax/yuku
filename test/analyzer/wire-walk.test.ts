@@ -4,7 +4,13 @@
 // pin down the wire-walk-specific surface (skip, stop, read-only,
 // subtree roots).
 import { describe, expect, test } from "bun:test";
-import { analyze as analyzeFile, walkWire, type Module } from "yuku-analyzer";
+import {
+    analyze as analyzeFile,
+    childIndexes,
+    walkWire,
+    walkWireIndexes,
+    type Module,
+} from "yuku-analyzer";
 
 function analyze(source: string, path = "input.js"): Module {
   return analyzeFile(source, { path });
@@ -179,5 +185,27 @@ import { readFile as rf } from "node:fs";
     const a = analyze(`f();`);
     const b = analyze(`g();`);
     expect(() => walkWire(a, {}, b.ast.body[0]!)).toThrow(TypeError);
+  });
+
+  test("walkWireIndexes delivers indexes and walks from a wire-index root", () => {
+    const module = analyze(`f(g(x)); class C { m() { h(); } }`, "input.ts");
+    const view = module._wire();
+    // 从语句索引开走：只访问该语句的子树
+    const seen: string[] = [];
+    walkWireIndexes(
+        module,
+        {
+            CallExpression: (index, ctx) => {
+                seen.push(`${index === ctx.node}`);
+                expect(ctx.parent).toBe(view.parentIndex(index));
+            },
+        },
+        childIndexes(view, view.programIndex)[0],
+    );
+    expect(seen).toEqual(["true", "true"]);
+    // 默认 root 是 Program
+    let calls = 0;
+    walkWireIndexes(module, { CallExpression: () => calls++ });
+    expect(calls).toBe(3);
   });
 });
