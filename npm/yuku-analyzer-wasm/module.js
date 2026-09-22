@@ -465,6 +465,7 @@ export class Module {
       const words = new Int32Array(this.#wireBuffer, 0, this.#wireBuffer.byteLength >> 2);
       return {
         buffer: this.#wireBuffer,
+        words,
         source: this.source,
         nodeCount: words[0],
         programIndex: words[8],

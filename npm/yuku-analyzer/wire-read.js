@@ -201,16 +201,9 @@ export const FIELD_SPECS = [
 // tag 7 (formal_parameter) decodes transparently to the wrapped pattern
 const TAG_FORMAL_PARAMETER = 7;
 
-// the u32 view per wire view, built once
-const wordsCache = new WeakMap();
-
+// the u32 view per wire view, built once at view creation
 export function wireWords(view) {
-  let words = wordsCache.get(view);
-  if (words === undefined) {
-    words = new Int32Array(view.buffer, 0, view.buffer.byteLength >> 2);
-    wordsCache.set(view, words);
-  }
-  return words;
+  return view.words;
 }
 
 export function tagOf(view, index) {
