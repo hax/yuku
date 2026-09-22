@@ -416,6 +416,8 @@ type WireIndexVisitors = {
 interface WireView {
   /** The raw analysis buffer. A 44-byte header, then 44-byte node records. */
   readonly buffer: ArrayBuffer;
+  /** The buffer as 32-bit words, the layout the readers index into. */
+  readonly words: Int32Array;
   /** The module's source text. */
   readonly source: string;
   /** The number of node records in the buffer. */
