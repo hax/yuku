@@ -248,6 +248,8 @@ class Export {
 export class Module {
   #r;
   #sem;
+  #wireBuffer;
+  #wireView = null;
   #scopes = null;
   #symbols = null;
   #references = null;
@@ -268,16 +270,14 @@ export class Module {
     this.analyzer = analyzer;
     this.path = path;
     this.source = typeof source === "string" ? source : _dec.decode(source);
-    this.#r = decode(
-      binding.analyze(typeof source === "string" ? _enc.encode(source) : source, {
-        lang: options.lang ?? langFromPath(path),
-        sourceType: options.sourceType ?? sourceTypeFromPath(path),
-        preserveParens: options.preserveParens,
-        attachComments: options.attachComments,
-        tokens: options.tokens,
-      }),
-      this.source,
-    );
+    this.#wireBuffer = binding.analyze(typeof source === "string" ? _enc.encode(source) : source, {
+      lang: options.lang ?? langFromPath(path),
+      sourceType: options.sourceType ?? sourceTypeFromPath(path),
+      preserveParens: options.preserveParens,
+      attachComments: options.attachComments,
+      tokens: options.tokens,
+    });
+    this.#r = decode(this.#wireBuffer, this.source);
     this.#sem = this.#r.semantic;
   }
 
@@ -438,6 +438,19 @@ export class Module {
 
   walkAsync(visitor, root) {
     return walkModuleAsync(this, visitor, root);
+  }
+
+  // the read-only wire view behind walkWire (wire-walk.js). The buffer is
+  // otherwise visible only inside decode's closure
+  _wire() {
+    return (this.#wireView ??= {
+      buffer: this.#wireBuffer,
+      nodeOf: this.#r.nodeOf,
+      indexOf: this.#r.indexOf,
+      parentIndex: this.#r.parentIndex,
+      startOf: this.#r.startOf,
+      endOf: this.#r.endOf,
+    });
   }
 
   findAll(types) {

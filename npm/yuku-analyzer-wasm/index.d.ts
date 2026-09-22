@@ -14,6 +14,7 @@ import type {
   TokenList,
   WalkContext as BaseWalkContext,
 } from "@yuku-toolchain/types";
+import type { AliasMap, AliasName } from "yuku-ast";
 
 /** A diagnostic produced by {@link Analyzer.link}. */
 interface LinkDiagnostic {
@@ -324,6 +325,70 @@ type AsyncVisitors = {
   leave?: AsyncWalkHandler;
 };
 
+/**
+ * The wire walk context: position info for the node being visited, plus
+ * `skip` / `stop`. One object is reused across the whole walk; do not
+ * hold onto it across nodes. The wire walk is read-only. The mutation
+ * operations of {@link WalkContext} are not part of it and throw when
+ * called on it.
+ */
+declare class WireWalkContext<T extends Node = Node> {
+  /** The module being walked. */
+  readonly module: Module;
+  /** The node being visited. */
+  get node(): T;
+  /** The node holding {@link node}, or null at the walk root. */
+  get parent(): Node | null;
+  /** Do not descend into the current node's children. */
+  skip(): void;
+  /** Stop the walk entirely. */
+  stop(): void;
+}
+
+/** Handler invoked with the precisely-typed node and the wire walk context. */
+type WireWalkHandler<T extends Node = Node> = (node: T, ctx: WireWalkContext<T>) => void;
+
+/** Enter/leave pair for one node type in a wire walk. */
+interface WireWalkHooks<T extends Node = Node> {
+  enter?: WireWalkHandler<T>;
+  leave?: WireWalkHandler<T>;
+}
+
+/**
+ * Visitors passed to {@link walkWire}: the same shape and per-node order
+ * as {@link Module.walk} accepts, including alias keys and the universal
+ * `enter` / `leave` catch-alls.
+ */
+type WireVisitors = {
+  [K in NodeType]?: WireWalkHandler<NodeOfType<K>> | WireWalkHooks<NodeOfType<K>>;
+} & {
+  [A in AliasName]?: WireWalkHandler<AliasMap[A]> | WireWalkHooks<AliasMap[A]>;
+} & {
+  enter?: WireWalkHandler;
+  leave?: WireWalkHandler;
+};
+
+/**
+ * The module's wire-format internals behind {@link walkWire}: the raw
+ * analysis buffer plus the decode layer's index-based accessors. Indices
+ * are wire node indices, stable per parse. Semi-internal, the shape
+ * evolves with the wire format.
+ */
+interface WireView {
+  /** The raw analysis buffer. A 44-byte header, then 44-byte node records. */
+  readonly buffer: ArrayBuffer;
+  /** Decodes the node at a wire index into its ESTree object, cached. */
+  nodeOf(index: number): Node;
+  /** The wire index of a decoded node object. */
+  indexOf(node: Node): number | undefined;
+  /** The wire index of a node's structural parent, or -1 at the root. */
+  parentIndex(index: number): number;
+  /** The node's start offset in UTF-16 code units. */
+  startOf(index: number): number;
+  /** The node's end offset in UTF-16 code units. */
+  endOf(index: number): number;
+}
+
 /** A free variable of a function, as reported by {@link Module.capturesOf}. */
 interface Capture {
   /** The outer binding being closed over. */
@@ -549,6 +614,9 @@ interface Module {
    */
   walkAsync(visitors: AsyncVisitors, root?: Node): Promise<void>;
 
+  /** The wire-format view backing {@link walkWire}. Semi-internal. */
+  _wire(): WireView;
+
   /** Collects every node of the given type(s), in source order. */
   findAll<K extends NodeType>(type: K): NodeOfType<K>[];
   findAll<K extends NodeType>(types: Iterable<K>): NodeOfType<K>[];
@@ -679,6 +747,17 @@ declare function langFromPath(path: string): SourceLang;
 /** Resolves a {@link SourceType} from a file path's extension. */
 declare function sourceTypeFromPath(path: string): SourceType;
 
+/**
+ * Walks the module's AST (or the subtree under `root`) reading the
+ * binary wire buffer directly: children come from an index built once
+ * per module, and a node is decoded into an ESTree object only when a
+ * visitor registered its type. Same traversal order and handler
+ * contract as {@link Module.walk}, except the walk is read-only and the
+ * program's synthesized Hashbang child is not a wire node and is not
+ * visited.
+ */
+declare function walkWire(module: Module, visitors: WireVisitors, root?: Node): void;
+
 export {
   analyze,
   Analyzer,
@@ -686,6 +765,7 @@ export {
   TokenKind,
   langFromPath,
   sourceTypeFromPath,
+  walkWire,
   type AddFileOptions,
   type AnalyzeOptions,
   type AnalyzerOptions,
@@ -713,4 +793,9 @@ export {
   type WalkContext,
   type WalkHandler,
   type WalkHooks,
+  type WireView,
+  type WireVisitors,
+  type WireWalkContext,
+  type WireWalkHandler,
+  type WireWalkHooks,
 };

@@ -16,6 +16,7 @@
     "analyzer.js",
     "module.js",
     "walk.js",
+    "wire-walk.js",
     "binding.js",
     "decode.js"
   ],
