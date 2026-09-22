@@ -185,7 +185,11 @@ interface Module {
 
   /** The binding a node declares or refers to. */
   bindingOf(node: Node): Binding | null;
+  /** The index-native twin of {@link bindingOf}, for wire walks. */
+  symbolOfIndex(index: number): Binding | null;
   referenceOf(node: Node): Reference | null;
+  /** The index-native twin of {@link referenceOf}, for wire walks. */
+  referenceOfIndex(index: number): Reference | null;
   /** The innermost scope around a node, the root scope for a node added later. */
   scopeOf(node: Node): Scope;
   parentOf(node: Node): Node | null;
@@ -241,6 +245,8 @@ interface Binding {
   readonly scope: Scope;
   /** Each declaration's name node. */
   readonly declarations: Node[];
+  /** The declarator nodes by wire index, in source order. */
+  readonly declarationIndexes: number[];
   /** Its uses in this module. */
   readonly references: Reference[];
   /** Whether any flag in `mask` is set. */
@@ -428,6 +434,43 @@ type WireVisitors = {
 };
 
 /**
+ * The index walk context: like {@link WireWalkContext}, except `node`
+ * and `parent` are wire indexes (`parent` is -1 at the walk root), so
+ * the walk materializes nothing.
+ */
+declare class WireIndexContext {
+  /** The module being walked. */
+  readonly module: Module;
+  /** The wire index of the node being visited. */
+  get node(): number;
+  /** The wire index of the walked parent, or -1 at the walk root. */
+  get parent(): number;
+  /** Do not descend into the current node's children. */
+  skip(): void;
+  /** Stop the walk entirely. */
+  stop(): void;
+}
+
+/** Handler invoked with a wire index and the index walk context. */
+type WireIndexHandler = (index: number, ctx: WireIndexContext) => void;
+
+/** Enter/leave pair for one node type in an index walk. */
+interface WireIndexHooks {
+  enter?: WireIndexHandler;
+  leave?: WireIndexHandler;
+}
+
+/** Visitors passed to {@link walkWireIndexes}, handlers receive wire indexes. */
+type WireIndexVisitors = {
+  [K in NodeType]?: WireIndexHandler | WireIndexHooks;
+} & {
+  [A in AliasName]?: WireIndexHandler | WireIndexHooks;
+} & {
+  enter?: WireIndexHandler;
+  leave?: WireIndexHandler;
+};
+
+/**
  * The module's wire-format internals behind {@link walkWire}: the raw
  * analysis buffer plus the decode layer's index-based accessors. Indices
  * are wire node indices, stable per parse. Semi-internal, the shape
@@ -436,6 +479,14 @@ type WireVisitors = {
 interface WireView {
   /** The raw analysis buffer. A 44-byte header, then 44-byte node records. */
   readonly buffer: ArrayBuffer;
+  /** The module's source text. */
+  readonly source: string;
+  /** The number of node records in the buffer. */
+  readonly nodeCount: number;
+  /** The wire index of the Program node. */
+  readonly programIndex: number;
+  /** Whether the module was parsed as TypeScript. */
+  readonly isTs: boolean;
   /** Decodes the node at a wire index into its ESTree object, cached. */
   nodeOf(index: number): Node;
   /** The wire index of a decoded node object. */
@@ -446,6 +497,8 @@ interface WireView {
   startOf(index: number): number;
   /** The node's end offset in UTF-16 code units. */
   endOf(index: number): number;
+  /** Decodes the string between two wire string coordinates. */
+  str(start: number, end: number): string;
 }
 
 /**
@@ -457,7 +510,40 @@ interface WireView {
  * program's synthesized Hashbang child is not a wire node and is not
  * visited.
  */
-declare function walkWire(module: Module, visitors: WireVisitors, root?: Node): void;
+declare function walkWire(module: Module, visitors: WireVisitors, root?: Node | number): void;
+
+/**
+ * The index-delivering twin of {@link walkWire}: handlers receive wire
+ * indexes instead of decoded nodes, so the walk materializes nothing.
+ */
+declare function walkWireIndexes(
+  module: Module,
+  visitors: WireIndexVisitors,
+  root?: Node | number,
+): void;
+
+/**
+ * The ESTree-visible child indexes of a node, in the decoder's field
+ * emission order. Powers generic subtree walks without materializing.
+ */
+declare function childIndexes(view: WireView, index: number): number[];
+
+/** The ESTree type name of the node at a wire index. */
+declare function wireTypeOf(view: WireView, index: number): string | null;
+
+/** The wire tag of the node at a wire index. */
+declare function tagOf(view: WireView, index: number): number;
+
+/** The flags word of the node at a wire index. */
+declare function flagsOf(view: WireView, index: number): number;
+
+/**
+ * Reads a named field of the node at a wire index, by the wire layout.
+ * Child nodes come back as wire indexes, array fields as fresh arrays of
+ * them. A field absent in JavaScript mode reads as undefined, matching
+ * the decoded object.
+ */
+declare function readField(view: WireView, index: number, field: string): unknown;
 
 declare function analyze(source: string, options?: AnalyzeOptions): Module;
 
@@ -465,7 +551,13 @@ export {
   analyze,
   Analyzer,
   BindingFlags,
+  childIndexes,
+  flagsOf,
+  readField,
+  tagOf,
   walkWire,
+  walkWireIndexes,
+  wireTypeOf,
   type AnalyzeOptions,
   type AnalyzerOptions,
   type AsyncSemanticVisitors,
@@ -489,6 +581,10 @@ export {
   type SemanticWalkHooks,
   type SetFileOptions,
   type Space,
+  type WireIndexContext,
+  type WireIndexHandler,
+  type WireIndexHooks,
+  type WireIndexVisitors,
   type WireView,
   type WireVisitors,
   type WireWalkContext,
