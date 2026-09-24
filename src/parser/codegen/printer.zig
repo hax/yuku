@@ -19,6 +19,8 @@ const Ctx = struct {
     no_in: bool = false,
     // in a `new` callee a call would bind to the `new`
     no_call: bool = false,
+    // an arrow's type parameters
+    no_jsx_tag: bool = false,
 };
 
 // at a leading edge `{`/`function`/`class`/`let[` would misparse as a block or declaration
@@ -1669,7 +1671,7 @@ const Printer = struct {
 
     fn emit_arrow_function_expression(self: *Self, a: *const ast.ArrowFunctionExpression) Error!void {
         if (a.async) try self.writeStr("async ");
-        try self.emit(a.type_parameters);
+        try self.emitExpr(a.type_parameters, .{ .no_jsx_tag = true });
         try self.emit(a.params);
         try self.emit(a.return_type);
         try self.space();
@@ -2113,8 +2115,17 @@ const Printer = struct {
     fn emit_ts_type_parameter_declaration(
         self: *Self,
         d: *const ast.TSTypeParameterDeclaration,
+        ctx: Ctx,
     ) Error!void {
-        try self.printAngleList(d.params);
+        try self.writeByte('<');
+        try self.emitList(d.params);
+        // in TSX a lone `<T>` opens a JSX tag, and `<T,>` is valid TS too
+        const params = self.tree.extra(d.params);
+        if (ctx.no_jsx_tag and params.len == 1) {
+            const param = self.tree.data(params[0]).ts_type_parameter;
+            if (param.constraint == .null) try self.writeByte(',');
+        }
+        try self.writeByte('>');
     }
 
     fn emit_ts_type_parameter_instantiation(

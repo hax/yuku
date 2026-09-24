@@ -1,6 +1,6 @@
 test/parser/suite/js/pass
 =========================
-Passed:       38732/38732 (100.00%)
+Passed:       38745/38745 (100.00%)
 Failed:       0
 AST mismatch: 0/38725
 
@@ -235,6 +235,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/017e622955c26160.module.js
 ✓ test/parser/suite/js/pass/017f49f284800d02.js
 ✓ test/parser/suite/js/pass/017f522563ebc3d1.js
+✓ test/parser/suite/js/pass/018266cacdd37d63.js
 ✓ test/parser/suite/js/pass/0182aa00cfbdde34.js
 ✓ test/parser/suite/js/pass/01837bd96a620421.js
 ✓ test/parser/suite/js/pass/01873a734cb23dba.js
@@ -2767,6 +2768,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/1246c0e6a2812412.js
 ✓ test/parser/suite/js/pass/124dbaa3edaf07cb.js
 ✓ test/parser/suite/js/pass/125082b67776b410.js
+✓ test/parser/suite/js/pass/1255632972f30c24.js
 ✓ test/parser/suite/js/pass/125694ce2476bdd6.js
 ✓ test/parser/suite/js/pass/1256c38af1574d33.js
 ✓ test/parser/suite/js/pass/1257740d6b713daa.js
@@ -4219,6 +4221,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/1bb0458bd5e499f2.js
 ✓ test/parser/suite/js/pass/1bb2941518bd8293.js
 ✓ test/parser/suite/js/pass/1bb678e4bda728ec.js
+✓ test/parser/suite/js/pass/1bb77a4505fb0c82.js
 ✓ test/parser/suite/js/pass/1bb836c56fb0e5a2.js
 ✓ test/parser/suite/js/pass/1bbc32c5dc1e8e09.js
 ✓ test/parser/suite/js/pass/1bbdf20d6c058657.js
@@ -5322,6 +5325,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/2338fae4554a2806.js
 ✓ test/parser/suite/js/pass/233e1bf52b42b64b.js
 ✓ test/parser/suite/js/pass/233f592129356d84.js
+✓ test/parser/suite/js/pass/233f9d44b67247a4.js
 ✓ test/parser/suite/js/pass/23410cd462fc4905.js
 ✓ test/parser/suite/js/pass/2345219be8ebcb61.js
 ✓ test/parser/suite/js/pass/234721790ab78c39.js
@@ -20699,6 +20703,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/89b729b64c35f032.js
 ✓ test/parser/suite/js/pass/89b97ec555c9a479.js
 ✓ test/parser/suite/js/pass/89bc16d4d7c0d0a5.js
+✓ test/parser/suite/js/pass/89bd02d69e043a2f.js
 ✓ test/parser/suite/js/pass/89bd28070f8b7f87.js
 ✓ test/parser/suite/js/pass/89bf6247422d0ea7.js
 ✓ test/parser/suite/js/pass/89c1de6bec46bc2b.js
@@ -22008,6 +22013,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/928e9ee29da2d29e.js
 ✓ test/parser/suite/js/pass/928ec21a93ed3124.js
 ✓ test/parser/suite/js/pass/9291ea440ff47ac1.js
+✓ test/parser/suite/js/pass/9292895c9740fca9.js
 ✓ test/parser/suite/js/pass/92957c23e627df90.js
 ✓ test/parser/suite/js/pass/9296dcc49012b9e6.js
 ✓ test/parser/suite/js/pass/92996b70f0e0a461.js
@@ -23402,6 +23408,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/9bd1547fea6dfea5.js
 ✓ test/parser/suite/js/pass/9bd22279ae73c1e1.js
 ✓ test/parser/suite/js/pass/9bd84d0251bfbd5c.js
+✓ test/parser/suite/js/pass/9bd97d7815f1c5a0.js
 ✓ test/parser/suite/js/pass/9bdd5cd42e40b580.js
 ✓ test/parser/suite/js/pass/9bde19474a0f146b.js
 ✓ test/parser/suite/js/pass/9bde628bee22c956.js
@@ -25497,6 +25504,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/a9540180cd6c6117.js
 ✓ test/parser/suite/js/pass/a9559888ee79fadd.js
 ✓ test/parser/suite/js/pass/a955c7a892679016.js
+✓ test/parser/suite/js/pass/a955da95bf8a48c5.js
 ✓ test/parser/suite/js/pass/a955f471c395013b.js
 ✓ test/parser/suite/js/pass/a9584eea1490ca33.js
 ✓ test/parser/suite/js/pass/a95981bbf0fd20f0.js
@@ -30147,6 +30155,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/c767fa4d683aa3ce.js
 ✓ test/parser/suite/js/pass/c7682fbf1633bdbb.js
 ✓ test/parser/suite/js/pass/c76b1aadcc8c51c9.js
+✓ test/parser/suite/js/pass/c76ea5f49eff10d0.js
 ✓ test/parser/suite/js/pass/c770ab435c467af3.js
 ✓ test/parser/suite/js/pass/c7711ae61e87d3e7.js
 ✓ test/parser/suite/js/pass/c771490bbb3dd6e9.js
@@ -30557,6 +30566,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/c9fa2b586f59c014.js
 ✓ test/parser/suite/js/pass/c9fce7cd6a6b5991.js
 ✓ test/parser/suite/js/pass/c9fd3721584fd72f.js
+✓ test/parser/suite/js/pass/c9ff79b3f5f501f0.js
 ✓ test/parser/suite/js/pass/ca01dedbb90775be.js
 ✓ test/parser/suite/js/pass/ca01f858c8010a57.js
 ✓ test/parser/suite/js/pass/ca08a4499bfa8a60.js
@@ -33026,6 +33036,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/da6209bc2892a508.js
 ✓ test/parser/suite/js/pass/da6340313ab92471.js
 ✓ test/parser/suite/js/pass/da64c4797dd75e40.js
+✓ test/parser/suite/js/pass/da6bc0048735e885.js
 ✓ test/parser/suite/js/pass/da6d8531d961e6c3.js
 ✓ test/parser/suite/js/pass/da707587a14e75ff.js
 ✓ test/parser/suite/js/pass/da70e29681a424cf.js
@@ -34684,6 +34695,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/e564438e2943bc8d.js
 ✓ test/parser/suite/js/pass/e56529abe14318db.js
 ✓ test/parser/suite/js/pass/e56551cd4773b85e.js
+✓ test/parser/suite/js/pass/e5685059d997ed88.js
 ✓ test/parser/suite/js/pass/e568a398491b5d6c.js
 ✓ test/parser/suite/js/pass/e56a25925a97c487.js
 ✓ test/parser/suite/js/pass/e56b1417dd72f11e.js
@@ -36021,6 +36033,7 @@ AST mismatch: 0/38725
 ✓ test/parser/suite/js/pass/ee4b90ee1200c32c.js
 ✓ test/parser/suite/js/pass/ee51602a886aaebf.js
 ✓ test/parser/suite/js/pass/ee51a43914a4e9bc.js
+✓ test/parser/suite/js/pass/ee527ad60b17d092.js
 ✓ test/parser/suite/js/pass/ee534b029be00e6f.js
 ✓ test/parser/suite/js/pass/ee534d51f9cc1dd6.js
 ✓ test/parser/suite/js/pass/ee54f594aa78e673.js

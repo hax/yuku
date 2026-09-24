@@ -112,3 +112,14 @@ test("TS leading union and intersection operators", () => {
       type D = A & B;"
     `);
 });
+
+test("an arrow's lone type parameter keeps a trailing comma", () => {
+  expect(
+    gen(`<T>(x: T) => x;\n<T = U>() => 0;\n<T extends U>() => 0;\nfunction f<T>() {}`),
+  ).toMatchInlineSnapshot(`
+    "<T,>(x: T) => x;
+    <T = U,>() => 0;
+    <T extends U>() => 0;
+    function f<T>() {}"
+  `);
+});

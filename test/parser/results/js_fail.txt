@@ -1,6 +1,6 @@
 test/parser/suite/js/fail
 =========================
-Passed:       4999/4999 (100.00%)
+Passed:       5000/5000 (100.00%)
 Failed:       0
 
 ✓ test/parser/suite/js/fail/0009a73f0859ac14.js
@@ -35591,6 +35591,16 @@ error: 'import' is reserved and cannot be used as an identifier
    |             ^^^^^^
  3 | });
    |
+
+✓ test/parser/suite/js/fail/bd6265ed2b71450f.js
+error: Expected a semicolon or an implicit semicolon after a statement, but found '9'
+   |
+ 1 | 0b19
+   |    ^
+ 2 | 
+   |
+   = help: Try inserting a semicolon here
+
 
 ✓ test/parser/suite/js/fail/bd6612527c652d70.js
 error: Unexpected token ')'
