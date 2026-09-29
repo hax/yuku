@@ -18,7 +18,7 @@ jobs:
           tar xf /tmp/zig.tar.xz -C /opt
           ln -s /opt/zig-x86_64-linux-0.16.0/zig /usr/local/bin/zig
       - name: clone benchmark files
-        run: git clone --depth 1 https://github.com/hax/ecmascript-parser-benchmark-native.git benchmark-files
+        run: git clone --depth 1 --branch m3pro https://github.com/hax/ecmascript-parser-benchmark-native.git benchmark-files
       - name: build old (215 parent)
         run: |
           git checkout d1621035 -- src/
