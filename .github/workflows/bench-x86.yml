@@ -1,6 +1,8 @@
 name: bench-x86
 on:
   workflow_dispatch:
+  push:
+    branches: [exp/b215-x86]
 
 jobs:
   bench:
