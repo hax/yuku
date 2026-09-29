@@ -7,6 +7,9 @@ const AMBIGUOUS = Symbol("ambiguous");
 
 export class Analyzer {
   #modules = new Map();
+  // import-chain results per symbol; cleared on every relink (a symbol
+  // object is unique to its (module, id), the WeakMap follows reanalysis)
+  #definitions = new WeakMap();
   #resolve;
   #diagnostics = [];
   #dirty = false;
@@ -50,6 +53,7 @@ export class Analyzer {
   link() {
     this.#dirty = false;
     this.#linking = true;
+    this.#definitions = new WeakMap();
     this.#diagnostics = [];
     for (const module of this.#modules.values()) {
       module._deps = [];
@@ -120,8 +124,18 @@ export class Analyzer {
     });
   }
 
-  // follow an import binding to its defining module and symbol (ResolveExport, InitializeEnvironment 7.c)
+  // follow an import binding to its defining module and symbol (ResolveExport, InitializeEnvironment 7.c). Results are deterministic once linked, so they memoize per symbol until the next relink
   definitionOf(symbol) {
+    this._ensureLinked();
+    let result = this.#definitions.get(symbol);
+    if (result === undefined) {
+      result = this.#definitionOfUncached(symbol);
+      this.#definitions.set(symbol, result);
+    }
+    return result;
+  }
+
+  #definitionOfUncached(symbol) {
     this._ensureLinked();
     let module = symbol.module;
     let current = symbol;

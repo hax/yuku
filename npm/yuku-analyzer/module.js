@@ -59,6 +59,8 @@ class Scope {
 
 class Symbol {
   #sem;
+  #declarations = null;
+  #declarationIndexes = null;
   constructor(module, sem, id) {
     this.module = module;
     this.id = id;
@@ -74,17 +76,24 @@ class Symbol {
     return this.module.scopes[this.#sem.symbol.scopeId(this.id)];
   }
   get declarations() {
-    const { symbol } = this.#sem;
-    const out = Array.from({ length: symbol.declCount(this.id) });
-    for (let i = 0; i < out.length; i++) out[i] = symbol.declNode(this.id, i);
-    return out;
+    // symbols are immutable once analyzed, the lists memoize per instance
+    if (this.#declarations === null) {
+      const { symbol } = this.#sem;
+      const out = Array.from({ length: symbol.declCount(this.id) });
+      for (let i = 0; i < out.length; i++) out[i] = symbol.declNode(this.id, i);
+      this.#declarations = out;
+    }
+    return this.#declarations;
   }
   // the declaration nodes by wire index, without decoding them
   get declarationIndexes() {
-    const { symbol } = this.#sem;
-    const out = Array.from({ length: symbol.declCount(this.id) });
-    for (let i = 0; i < out.length; i++) out[i] = symbol.declNodeIndex(this.id, i);
-    return out;
+    if (this.#declarationIndexes === null) {
+      const { symbol } = this.#sem;
+      const out = Array.from({ length: symbol.declCount(this.id) });
+      for (let i = 0; i < out.length; i++) out[i] = symbol.declNodeIndex(this.id, i);
+      this.#declarationIndexes = out;
+    }
+    return this.#declarationIndexes;
   }
   get references() {
     return this.module._referencesOfSymbol(this.id);
