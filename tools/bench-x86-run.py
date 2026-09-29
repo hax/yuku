@@ -9,7 +9,7 @@ def run(binary, mode, path, iters):
     return json.loads(out.stdout.strip().split("\n")[-1])
 
 def main():
-    files = "benchmark-files/files"
+    files = "benchmark-files"
     cases = [("parse", "typescript.js", 10), ("parse", "checker.ts", 25), ("parse", "lib.dom.d.ts", 60)]
     bins = {"old": "/tmp/old", "new": "/tmp/new", "t4": "/tmp/t4"}
     rounds = 7
