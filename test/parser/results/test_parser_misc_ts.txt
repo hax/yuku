@@ -1,8 +1,8 @@
 test/parser/misc/ts
 ===================
-Passed:       61/61 (100.00%)
+Passed:       63/63 (100.00%)
 Failed:       0
-AST mismatch: 0/61
+AST mismatch: 0/63
 
 ✓ test/parser/misc/ts/abstract-constructor-body.ts
 error: Constructor cannot be abstract
