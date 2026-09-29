@@ -433,6 +433,19 @@ export function walkWireIndexes(module, visitors, root) {
   walkWireImpl(module, visitors, root, true);
 }
 
+// per-call scratch buffers. walks are synchronous but handlers may nest
+// further walks (a check inside a handler resolves types that walk
+// again), so buffers come from a free-list rather than being singletons
+const scratchPool = [];
+function acquireScratch() {
+  return scratchPool.pop() ?? {
+    memo: new Array(TAG_NAMES.length),
+    stackIndex: new Int32Array(64),
+    stackNext: new Int32Array(64),
+    stackEntry: new Array(64),
+  };
+}
+
 function walkWireImpl(module, visitors, root, deliverIndex) {
   if (visitors === null || typeof visitors !== "object") {
     throw new TypeError("walkWire: visitors must be an object");
@@ -460,14 +473,14 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
   ctx._deliverIndex = deliverIndex;
 
   // entered frames. Node index, next child position, handler entry.
-  let stackIndex = new Int32Array(64);
-  let stackNext = new Int32Array(64);
-  let stackEntry = new Array(64);
+  const scratch = acquireScratch();
+  const memo = scratch.memo;
+  memo.fill(undefined);
+  let { stackIndex, stackNext, stackEntry } = scratch;
   let depth = 0;
 
   // handler lookup memoized per tag for this call. The flags-dependent
   // tags stay unmemoized, their name varies per node.
-  const memo = new Array(TAG_NAMES.length);
   const handlersOf = (i) => {
     const word = u32[i * 12 + 11];
     const tag = word & 255;
@@ -512,6 +525,9 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
       grownNext.set(stackNext);
       stackNext = grownNext;
       stackEntry = stackEntry.concat(new Array(depth));
+      scratch.stackIndex = stackIndex;
+      scratch.stackNext = stackNext;
+      scratch.stackEntry = stackEntry;
     }
     stackIndex[depth] = i;
     stackNext[depth] = skip ? offsets[i + 1] : offsets[i];
@@ -544,16 +560,21 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
     return true;
   };
 
-  if (!enterNode(rootIndex)) return;
+  const finish = () => {
+    scratchPool.push(scratch);
+    return undefined;
+  };
+  if (!enterNode(rootIndex)) return finish();
   while (depth > 0) {
     const top = depth - 1;
     const i = stackIndex[top];
     const next = stackNext[top];
     if (next < offsets[i + 1]) {
       stackNext[top] = next + 1;
-      if (!enterNode(children[next])) return;
+      if (!enterNode(children[next])) return finish();
     } else if (!leaveNode()) {
-      return;
+      return finish();
     }
   }
+  finish();
 }
