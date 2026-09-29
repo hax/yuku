@@ -280,4 +280,16 @@ pub fn build(b: *std.Build) void {
         const generator_step = b.step(cfg.step, cfg.description);
         generator_step.dependOn(&b.addInstallFile(generator_output, cfg.output).step);
     }
+
+    const bench215_module = b.createModule(.{
+        .root_source_file = b.path("tools/bench215.zig"),
+        .target = b.graph.host,
+        .optimize = optimize,
+    });
+    bench215_module.addImport("parser", parser_module);
+    const bench215_exe = b.addExecutable(.{
+        .name = "bench215",
+        .root_module = bench215_module,
+    });
+    b.installArtifact(bench215_exe);
 }

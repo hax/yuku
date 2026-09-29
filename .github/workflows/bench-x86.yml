@@ -1,0 +1,36 @@
+name: bench-x86
+on:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: install zig 0.16.0
+        run: |
+          curl -fsSL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          tar xf /tmp/zig.tar.xz -C /opt
+          ln -s /opt/zig-x86_64-linux-0.16.0/zig /usr/local/bin/zig
+      - name: clone benchmark files
+        run: git clone --depth 1 https://github.com/hax/ecmascript-parser-benchmark-native.git benchmark-files
+      - name: build old (215 parent)
+        run: |
+          git checkout d1621035 -- src/
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/bench215 /tmp/old
+          git checkout HEAD -- src/
+      - name: build new (215)
+        run: |
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/bench215 /tmp/new
+      - name: build new + T4 scalar prefix
+        run: |
+          python3 tools/make-T4.py
+          zig build -Doptimize=ReleaseFast
+          cp zig-out/bin/bench215 /tmp/t4
+      - name: run
+        run: python3 tools/bench-x86-run.py
