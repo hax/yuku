@@ -18,6 +18,9 @@ const AMBIGUOUS = Symbol("ambiguous");
 export class Analyzer {
   #core;
   #modules = new Map();
+  // import-chain results per symbol; cleared on every relink (a symbol
+  // object is unique to its (module, id), the WeakMap follows reanalysis)
+  #definitions = new WeakMap();
   #resolve;
   #diagnostics = [];
   #dirty = false;
@@ -65,6 +68,7 @@ export class Analyzer {
     this.#exportResolutions = new Map();
     this.#merged = new Map();
     this.#addedExports = new Map();
+    this.#definitions = new WeakMap();
     const diagnostics = [];
     for (const module of this.#modules.values()) {
       diagnostics.push(...module.diagnostics);
@@ -123,8 +127,19 @@ export class Analyzer {
     if (this.#dirty) this.link();
   }
 
+  // results are deterministic once linked, so they memoize per binding
+  // until the next relink
   _definitionOf(binding) {
     this._link(binding.module);
+    let result = this.#definitions.get(binding);
+    if (result === undefined) {
+      result = this.#definitionOfUncached(binding);
+      this.#definitions.set(binding, result);
+    }
+    return result;
+  }
+
+  #definitionOfUncached(binding) {
     const seen = new Set();
     let current = binding;
     while (current.has(BindingFlags.Import)) {
