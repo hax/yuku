@@ -54,34 +54,183 @@ const TAG_NAMES = [
 
 // Child slots per wire tag, same tag order as TAG_NAMES, mirroring the
 // decoder's private table. Pairs of (kind, slot) read against the node's
-// 11-word record. kind 0 is a single child index at word slot. Otherwise
-// the extras start is at word slot and the count comes from word slot+1
-// (kind 1), the low 16 bits of word 1 (kind 2), or its high 16 bits
-// (kind 3). Slot order is ESTree field order, so children built from it
+// 12-word record (transfer format v9). kind 0 is a single child index at
+// word slot; kind 1 is an extras array, start at word slot and count at
+// slot + 1. Slot order is ESTree field order, so children built from it
 // come out in `module.walk` order.
 const CHILD_SLOTS = [
-  [2,2], [0,2], [0,2,0,3,0,4,0,5], [0,2,0,3,0,4,0,5,0,6], [2,2], [2,2], [2,2,0,3], [0,2],
-  [0,2,0,3], [0,2,0,3], [0,2,0,3,0,4], [0,2], [0,2], [0,2,0,3], [2,2], [2,2],
-  [0,2], [0,2,0,3], [0,2,0,3], [0,2,0,3,2,4], [0,2], [0,2,0,3,0,4], [0,2,0,3,2,4], [0,2],
-  [0,2], [0,2,0,3], [0,2], [2,2,0,3,0,4,0,5,0,6,3,7,0,8], [2,2], [2,2,0,3,0,4], [2,2,0,3,0,4,0,5], [2,2],
-  [], [], [], [], [], [], [], [],
-  [2,2,3,3], [], [], [], [2,4,0,5], [], [], [0,2],
-  [0,2,0,3,0,4], [0,2,2,3], [0,2,2,3], [0,2,0,3,0,4,0,5], [0,2,0,3,0,4], [0,2,0,3,0,4], [0,2,0,3], [0,2,0,3],
-  [0,2], [0,2], [0,2,0,3], [0,2,0,3], [0,2], [0,2], [0,2,0,3,0,4], [0,2,0,3],
-  [], [], [2,2], [0,2,0,3], [0,2], [2,2,0,3,0,4,0,5], [2,2,0,3,0,4], [2,2,3,3,0,4,0,5],
-  [2,2,3,3,0,4,0,5], [0,2,0,3], [2,2], [0,2,0,3], [2,2,0,3,3,4], [0,2,0,3], [0,2], [0,2],
-  [0,2,0,3], [0,2,2,3,0,4,3,5], [0,2], [0,2,0,3,2,4], [0,2,0,3], [0,2], [], [],
-  [], [], [], [], [], [], [], [],
-  [], [], [], [], [], [0,2,0,3], [0,2,0,3], [0,2,0,3],
-  [0,2,0,3,0,4,0,5], [0,2,0,3,0,4], [2,2], [2,2], [0,2], [2,2,3,3], [0,2], [0,2,0,3],
-  [2,2], [0,2,0,3], [0,2], [0,2], [0,2], [0,2], [], [2,2],
-  [2,2], [0,2,0,3,0,4,0,5], [0,2], [0,2], [0,2], [0,2,0,3,0,4], [0,2,0,3,0,4], [0,2,0,3],
-  [2,2], [0,2,0,3,0,4,0,5], [0,2,0,3], [0,2,0,3,0,4,0,5], [0,2,0,3,0,4], [0,2,0,3,0,4], [2,2,0,3], [0,2,0,3,0,4],
-  [0,2,0,3,2,4,0,5], [2,2], [0,2,0,3], [0,2,0,3], [0,2,0,3], [2,2], [0,2,0,3], [0,2,0,3],
-  [2,2], [0,2,0,3], [2,2,0,3], [0,2], [0,2,0,3], [0,2,0,3], [0,2,0,3], [0,2],
-  [0,2,0,3], [0,2], [0,2], [0,2,0,3], [0,2], [0,2,2,3,0,4], [0,2,0,3,2,4], [0,2],
-  [0,2,2,3,0,4], [], [], [], [0,2,0,3], [0,2,0,3], [0,2,0,3], [0,2],
-  [0,2], [], [], [0,2],
+  [1,1,],
+  [0,1,],
+  [0,1,0,2,0,3,0,4,],
+  [0,1,0,2,0,3,0,4,0,5,],
+  [1,1,],
+  [1,1,],
+  [1,1,0,3,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,0,3,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,],
+  [1,1,],
+  [1,1,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,1,3,],
+  [0,1,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,1,3,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,],
+  [1,1,0,3,0,4,0,5,0,6,1,7,0,9,],
+  [1,1,],
+  [1,1,0,3,0,4,],
+  [1,1,0,3,0,4,0,5,],
+  [1,1,],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [1,1,1,3,],
+  [],
+  [],
+  [],
+  [1,3,0,5,],
+  [],
+  [],
+  [0,1,],
+  [0,1,0,2,0,3,],
+  [0,1,1,2,],
+  [0,1,1,2,],
+  [0,1,0,2,0,3,0,4,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,],
+  [],
+  [],
+  [1,1,],
+  [0,1,0,2,],
+  [0,1,],
+  [1,1,0,3,0,4,0,5,],
+  [1,1,0,3,0,4,],
+  [1,1,1,3,0,5,0,6,],
+  [1,1,1,3,0,5,0,6,],
+  [0,1,0,2,],
+  [1,1,],
+  [0,1,0,2,],
+  [1,1,0,3,1,4,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,1,2,0,4,1,5,],
+  [0,1,],
+  [0,1,0,2,1,3,],
+  [0,1,0,2,],
+  [0,1,],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,0,3,0,4,],
+  [0,1,0,2,0,3,],
+  [1,1,],
+  [1,1,],
+  [0,1,],
+  [1,1,1,3,],
+  [0,1,],
+  [0,1,0,2,],
+  [1,1,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,],
+  [0,1,],
+  [0,1,],
+  [],
+  [1,1,],
+  [1,1,],
+  [0,1,0,2,0,3,0,4,],
+  [0,1,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,],
+  [1,1,],
+  [0,1,0,2,0,3,0,4,],
+  [0,1,0,2,],
+  [0,1,0,2,0,3,0,4,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,0,3,],
+  [1,1,0,3,],
+  [0,1,0,2,0,3,],
+  [0,1,0,2,1,3,0,5,],
+  [1,1,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [1,1,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [1,1,],
+  [0,1,0,2,],
+  [1,1,0,3,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,1,2,0,4,],
+  [0,1,0,2,1,3,],
+  [0,1,],
+  [0,1,1,2,0,4,],
+  [],
+  [],
+  [],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,0,2,],
+  [0,1,],
+  [0,1,],
+  [],
+  [],
+  [0,1,],
 ];
 
 // the flags-dependent names, mirroring the decoder exactly
@@ -126,7 +275,7 @@ export function wireTypeName(tag, flags, isTs) {
 // formal_parameters over formal_parameter, so the recursion bottoms out
 // at depth 2.
 function forEachChild(u32, extraBase, i, visit) {
-  const b = i * 11 + 11;
+  const b = i * 12 + 11;
   const ops = CHILD_SLOTS[u32[b] & 255];
   for (let q = 0; q < ops.length; q += 2) {
     const slot = ops[q + 1];
@@ -135,8 +284,7 @@ function forEachChild(u32, extraBase, i, visit) {
       if (child !== -1) visitChild(u32, extraBase, child, visit);
     } else {
       const start = u32[b + slot];
-      const word = u32[b + 1];
-      const count = ops[q] === 1 ? u32[b + slot + 1] : ops[q] === 2 ? word & 65535 : word >>> 16;
+      const count = u32[b + slot + 1];
       for (let j = 0; j < count; j++) {
         const child = u32[extraBase + start + j];
         if (child !== -1) visitChild(u32, extraBase, child, visit);
@@ -146,7 +294,7 @@ function forEachChild(u32, extraBase, i, visit) {
 }
 
 function visitChild(u32, extraBase, child, visit) {
-  const tag = u32[child * 11 + 11] & 255;
+  const tag = u32[child * 12 + 11] & 255;
   if (tag === TAG_FORMAL_PARAMETERS || tag === TAG_FORMAL_PARAMETER) {
     forEachChild(u32, extraBase, child, visit);
   } else {
@@ -156,7 +304,7 @@ function visitChild(u32, extraBase, child, visit) {
 
 // the ESTree type name of the node at a wire index, null for pseudo tags
 export function wireTypeOf(view, index) {
-  const word = wireWords(view)[index * 11 + 11];
+  const word = wireWords(view)[index * 12 + 11];
   return wireTypeName(word & 255, word >>> 16, view.isTs);
 }
 
@@ -169,7 +317,7 @@ function wireIndexOf(module) {
   const view = module._wire();
   const u32 = wireWords(view);
   const nodeCount = u32[0];
-  const extraBase = 11 + nodeCount * 11;
+  const extraBase = 11 + nodeCount * 12;
   const offsets = new Int32Array(nodeCount + 1);
   for (let i = 0; i < nodeCount; i++) {
     forEachChild(u32, extraBase, i, () => {
@@ -285,6 +433,19 @@ export function walkWireIndexes(module, visitors, root) {
   walkWireImpl(module, visitors, root, true);
 }
 
+// per-call scratch buffers. walks are synchronous but handlers may nest
+// further walks (a check inside a handler resolves types that walk
+// again), so buffers come from a free-list rather than being singletons
+const scratchPool = [];
+function acquireScratch() {
+  return scratchPool.pop() ?? {
+    memo: new Array(TAG_NAMES.length),
+    stackIndex: new Int32Array(64),
+    stackNext: new Int32Array(64),
+    stackEntry: new Array(64),
+  };
+}
+
 function walkWireImpl(module, visitors, root, deliverIndex) {
   if (visitors === null || typeof visitors !== "object") {
     throw new TypeError("walkWire: visitors must be an object");
@@ -300,7 +461,7 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
   if (rootIndex === undefined || rootIndex < 0 || rootIndex >= u32[0]) {
     throw new TypeError("walkWire: root does not belong to this module's AST");
   }
-  const rootWord = u32[rootIndex * 11 + 11];
+  const rootWord = u32[rootIndex * 12 + 11];
   if (wireTypeName(rootWord & 255, rootWord >>> 16, isTs) === null) {
     throw new TypeError("walkWire: root is a formal-parameters pseudo node, not an ESTree node");
   }
@@ -312,16 +473,16 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
   ctx._deliverIndex = deliverIndex;
 
   // entered frames. Node index, next child position, handler entry.
-  let stackIndex = new Int32Array(64);
-  let stackNext = new Int32Array(64);
-  let stackEntry = new Array(64);
+  const scratch = acquireScratch();
+  const memo = scratch.memo;
+  memo.fill(undefined);
+  let { stackIndex, stackNext, stackEntry } = scratch;
   let depth = 0;
 
   // handler lookup memoized per tag for this call. The flags-dependent
   // tags stay unmemoized, their name varies per node.
-  const memo = new Array(TAG_NAMES.length);
   const handlersOf = (i) => {
-    const word = u32[i * 11 + 11];
+    const word = u32[i * 12 + 11];
     const tag = word & 255;
     const hit = memo[tag];
     if (hit !== undefined) return hit;
@@ -364,6 +525,9 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
       grownNext.set(stackNext);
       stackNext = grownNext;
       stackEntry = stackEntry.concat(new Array(depth));
+      scratch.stackIndex = stackIndex;
+      scratch.stackNext = stackNext;
+      scratch.stackEntry = stackEntry;
     }
     stackIndex[depth] = i;
     stackNext[depth] = skip ? offsets[i + 1] : offsets[i];
@@ -396,16 +560,21 @@ function walkWireImpl(module, visitors, root, deliverIndex) {
     return true;
   };
 
-  if (!enterNode(rootIndex)) return;
+  const finish = () => {
+    scratchPool.push(scratch);
+    return undefined;
+  };
+  if (!enterNode(rootIndex)) return finish();
   while (depth > 0) {
     const top = depth - 1;
     const i = stackIndex[top];
     const next = stackNext[top];
     if (next < offsets[i + 1]) {
       stackNext[top] = next + 1;
-      if (!enterNode(children[next])) return;
+      if (!enterNode(children[next])) return finish();
     } else if (!leaveNode()) {
-      return;
+      return finish();
     }
   }
+  finish();
 }
