@@ -12,13 +12,15 @@ def main():
     files = "benchmark-files"
     cases = [("parse", "typescript.js", 10), ("parse", "checker.ts", 25), ("parse", "lib.dom.d.ts", 60)]
     bins = {"old": "/tmp/old", "new": "/tmp/new", "t4": "/tmp/t4"}
-    rounds = 7
+    rounds = 5
     for mode, name, iters in cases:
         path = f"{files}/{name}"
         samples = {k: [] for k in bins}
         checks = {}
         for r in range(rounds):
-            for k, b in bins.items():
+            # 正反各一遍，消除 runner 上的顺序/热身偏差
+            order = list(bins.items())
+            for k, b in order + order[::-1]:
                 r_ = run(b, mode, path, iters)
                 samples[k].append(r_["ns_per_iter"])
                 checks[k] = r_["check"]
