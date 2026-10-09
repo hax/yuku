@@ -1,4 +1,4 @@
-export type { AliasMap, AliasName } from "./aliases.js";
+export { ALIAS_GROUPS, type AliasMap, type AliasName } from "./aliases.js";
 export { b } from "./builders.js";
 export { WalkContext } from "./context.js";
 export { CHILD_KEYS } from "./generated.js";
