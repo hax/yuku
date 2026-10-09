@@ -1,6 +1,6 @@
 test/parser/suite/js/fail
 =========================
-Passed:       5000/5000 (100.00%)
+Passed:       5004/5004 (100.00%)
 Failed:       0
 
 ✓ test/parser/suite/js/fail/0009a73f0859ac14.js
@@ -17108,6 +17108,14 @@ error: Unexpected token ';'
    = help: Expected an expression
 
 
+✓ test/parser/suite/js/fail/5a84dcc8dd9c7d59.module.js
+error: 'await' is reserved in an async/module context and cannot be used as a binding identifier
+   |
+ 1 | async (x = async function await() {}) => {};
+   |                           ^^^^^
+ 2 | 
+   |
+
 ✓ test/parser/suite/js/fail/5a87c20baea6ecd8.js
 error: Expected ',' or ']' in array, but found 'foo'
    |
@@ -18721,6 +18729,14 @@ error: Expected '(' for getter/setter definition, but found ';'
    |
    = help: Getters and setters require parentheses. Use 'get prop() {}' or 'set prop(value) {}' syntax.
 
+
+✓ test/parser/suite/js/fail/63431ca3421124e9.module.js
+error: 'await' is reserved in an async/module context and cannot be used as a binding identifier
+   |
+ 1 | async (x = function await() {}, await) => {};
+   |                     ^^^^^
+ 2 | async (x = function await() {}, y = await) => {};
+   |
 
 ✓ test/parser/suite/js/fail/63452bbeb15314d6.js
 error: Invalid element in assignment pattern
@@ -35049,6 +35065,14 @@ error: Numeric separator is only allowed between two digits
    = help: Try placing the separator between two digits, or removing it
 
 
+✓ test/parser/suite/js/fail/ba2b9c315c984841.module.js
+error: 'await' is reserved in an async/module context and cannot be used as a binding identifier
+   |
+ 1 | async (x = class await {}) => {};
+   |                  ^^^^^
+ 2 | 
+   |
+
 ✓ test/parser/suite/js/fail/ba2d36d35efa68ec.js
 error: Unexpected token 'end of file'
    |
@@ -43151,6 +43175,14 @@ error: Function declaration requires a name
    |
    = help: Add a name after 'function', e.g. 'function myFunc() {}'.
 
+
+✓ test/parser/suite/js/fail/e7822c826ae177d9.module.js
+error: 'await' is reserved in an async/module context and cannot be used as a binding identifier
+   |
+ 1 | class await {}
+   |       ^^^^^
+ 2 | (class await {});
+   |
 
 ✓ test/parser/suite/js/fail/e7b2b3790afb8b3e.js
 error: Unexpected token '>'
