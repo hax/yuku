@@ -186,6 +186,7 @@ const FIXED_STRING = table({
   TSVoidKeyword: "void",
   TSUndefinedKeyword: "undefined",
   TSStringKeyword: "string",
+  TSIntKeyword: "int",
   TSNumberKeyword: "number",
   TSBigIntKeyword: "bigint",
   TSBooleanKeyword: "boolean",
