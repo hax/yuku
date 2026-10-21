@@ -26,6 +26,7 @@ import {
   type Reference,
   type Scope,
 } from "./semantic";
+import { createWireView, type WireView } from "./wire-read";
 
 export interface FileOptions {
   /** @default from `path`, else "js" */
@@ -100,6 +101,7 @@ export class SourceFile {
   private model: Model | null = null;
   private lines: number[] | null = null;
   private solo: Project | null = null;
+  private wire: WireView | null = null;
 
   /** @internal */
   constructor(source: string | Uint8Array, options: ParseOptions, project: Project | null) {
@@ -113,6 +115,7 @@ export class SourceFile {
     this.lang = lang;
     this.sourceType = sourceType;
     this.syntax = decode(buffer, text, this.path);
+    Object.defineProperty(this.syntax, "wireBuffer", { value: buffer });
     this.analyzed = this.syntax;
     if (malformed >= 0) {
       const span = { start: malformed, end: malformed + 1 };
@@ -148,6 +151,10 @@ export class SourceFile {
   }
   /** Every binding, indexed by id. */
   get bindings(): readonly Binding[] {
+    return this._model.bindings;
+  }
+  /** Alias of {@link bindings}, kept for the wire API's existing consumers. */
+  get symbols(): readonly Binding[] {
     return this._model.bindings;
   }
   /** Every name in use, in source order. */
@@ -191,9 +198,24 @@ export class SourceFile {
     if (index === undefined) return null;
     return this._model.declarationAt(index) ?? this._model.referenceAt(index)?.binding ?? null;
   }
+  /** Alias of {@link bindingOf}, the name the wire API first shipped with. */
+  symbolOf(node: Node): Binding | null {
+    return this.bindingOf(node);
+  }
+
+  /** The index-native twin of {@link bindingOf}, for wire walks. */
+  symbolOfIndex(index: number): Binding | null {
+    return this._model.declarationAt(index) ?? this._model.referenceAt(index)?.binding ?? null;
+  }
+
   referenceOf(node: Node): Reference | null {
     const index = this.analyzed.indexOf(node);
     return index === undefined ? null : this._model.referenceAt(index);
+  }
+
+  /** The index-native twin of {@link referenceOf}, for wire walks. */
+  referenceOfIndex(index: number): Reference | null {
+    return this._model.referenceAt(index);
   }
   /** The scope a node creates, or the innermost one around it. */
   scopeOf(node: Node): Scope {
@@ -284,13 +306,23 @@ export class SourceFile {
     return { line: low + 1, column: offset - lines[low]! };
   }
 
+  /**
+   * The read-only wire view behind walkWire and walkWireIndexes
+   * (./wire-walk) and the field readers (./wire-read). Semi-internal.
+   */
+  _wire(): WireView {
+    return (this.wire ??= createWireView(this.analyzed, this.source));
+  }
+
   /** Builds the semantic model again for the program as it is now, on its own nodes. */
   reanalyze(): void {
     const tree = encode(this.program, isTs(this.lang), true);
     const flags = treeFlags(this.lang, this.sourceType);
     const buffer = this._core.backend().runTree("analyzeTree", tree, "", flags, 0);
     this.analyzed = decode(buffer, "", this.path, tree as EncodedNodes);
+    Object.defineProperty(this.analyzed, "wireBuffer", { value: buffer });
     this.model = null;
+    this.wire = null;
     (this.project ?? this.solo)?._invalidate();
   }
 

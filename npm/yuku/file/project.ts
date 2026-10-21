@@ -56,6 +56,7 @@ export class Project {
   private addedExports = new Map<SourceFile, Map<string, Binding>>();
   private importsFrom = new Map<SourceFile, SourceFile[]>();
   private importedBy = new Map<SourceFile, SourceFile[]>();
+  private definitions = new WeakMap<Binding, Definition | null>();
 
   constructor(options: ProjectOptions = {}) {
     this.core = options.core;
@@ -114,6 +115,17 @@ export class Project {
   /** @internal */
   _definitionOf(binding: Binding): Definition | null {
     this._link(binding.file);
+    // results are deterministic once linked, so they memoize per binding
+    // until the next relink
+    let result = this.definitions.get(binding);
+    if (result === undefined) {
+      result = this.resolveDefinition(binding);
+      this.definitions.set(binding, result);
+    }
+    return result;
+  }
+
+  private resolveDefinition(binding: Binding): Definition | null {
     const seen = new Set<Binding>();
     let current = binding;
     while (current.has(BindingFlags.Import)) {
@@ -179,6 +191,7 @@ export class Project {
     this.addedExports = new Map();
     this.importsFrom = new Map();
     this.importedBy = new Map();
+    this.definitions = new WeakMap();
     const diagnostics: Diagnostic[] = [];
     for (const file of this.fileByPath.values()) diagnostics.push(...file.diagnostics);
     for (const file of this.fileByPath.values()) {
@@ -232,7 +245,12 @@ export class Project {
 
   private definition(file: SourceFile, binding: Binding | null): Definition {
     const merged = binding === null ? undefined : this.merged.get(binding);
-    return { file, binding, augmentations: merged === undefined ? [] : merged.slice(1) };
+    return {
+      file,
+      binding,
+      symbol: binding,
+      augmentations: merged === undefined ? [] : merged.slice(1),
+    };
   }
 
   private augment(file: SourceFile, binding: Binding): void {

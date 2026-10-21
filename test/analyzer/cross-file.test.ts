@@ -85,6 +85,7 @@ describe("resolveExport", () => {
     expect(lib.resolveExport("ns")).toEqual({
       file: project.files.get("a.ts")!,
       binding: null,
+      symbol: null,
       augmentations: [],
     });
     expect(lib.resolveExport("default")).toBeNull();

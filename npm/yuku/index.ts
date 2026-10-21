@@ -45,8 +45,26 @@ export type {
   Space,
 } from "./file/semantic";
 export const BindingFlags: BindingFlagMap = bindingFlags;
+/** Alias of {@link Binding}, the name the wire API first shipped with. */
+export type { Binding as Symbol } from "./file/semantic";
+/** Alias of {@link BindingFlags}, the name the wire API first shipped with. */
+export const SymbolFlags: BindingFlagMap = bindingFlags;
 
 export { Project, type ProjectOptions } from "./file/project";
+
+export { childIndexes, flagsOf, readField, tagOf } from "./file/wire-read";
+export type { WireView } from "./file/wire-read";
+export { walkWire, walkWireIndexes, wireTypeOf } from "./file/wire-walk";
+export type {
+  WireIndexContext,
+  WireIndexHandler,
+  WireIndexHooks,
+  WireIndexVisitors,
+  WireVisitors,
+  WireWalkContext,
+  WireWalkHandler,
+  WireWalkHooks,
+} from "./file/wire-walk";
 
 export {
   print,

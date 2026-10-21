@@ -83,6 +83,8 @@ export interface Decoded {
   indexOf(node: Node): number | undefined;
   /** -1 at the root. */
   parentIndex(index: number): number;
+  /** @internal The raw transfer buffer, read directly by the analyzer's wire layer. */
+  wireBuffer: ArrayBuffer;
 }
 
 /** A tree `encode` wrote, with the nodes it read, by index. */

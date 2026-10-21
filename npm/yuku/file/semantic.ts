@@ -95,6 +95,8 @@ export interface ModuleFlags {
 export interface Definition {
   readonly file: SourceFile;
   readonly binding: Binding | null;
+  /** Alias of {@link binding}, the name the wire API first shipped with. */
+  readonly symbol: Binding | null;
   /** The bindings that `declare module` blocks merge into it. */
   readonly augmentations: readonly Binding[];
 }
@@ -175,6 +177,7 @@ export class Scope {
 export class Binding {
   readonly id: number;
   private model: Model;
+  private declarationIndexList: number[] | null = null;
 
   /** @internal */
   constructor(model: Model, id: number) {
@@ -198,6 +201,17 @@ export class Binding {
   get declarations(): readonly Node[] {
     const { symbol } = this.model.semantic;
     return Array.from({ length: symbol.declCount(this.id) }, (_, i) => symbol.declNode(this.id, i));
+  }
+  /** The declaration name nodes by wire index, without decoding them. */
+  get declarationIndexes(): number[] {
+    // symbols are immutable once analyzed, the list memoizes per instance
+    if (this.declarationIndexList === null) {
+      const { symbol } = this.model.semantic;
+      const out = new Array<number>(symbol.declCount(this.id));
+      for (let i = 0; i < out.length; i++) out[i] = symbol.declNodeIndex(this.id, i);
+      this.declarationIndexList = out;
+    }
+    return this.declarationIndexList;
   }
   /** Its uses in this file. */
   get references(): readonly Reference[] {
@@ -281,6 +295,10 @@ export class Reference {
   get binding(): Binding | null {
     const binding = this.model.semantic.reference.symbolId(this.id);
     return binding === null ? null : this.model.bindings[binding]!;
+  }
+  /** Alias of {@link binding}, kept for the wire API's existing consumers. */
+  get symbol(): Binding | null {
+    return this.binding;
   }
 }
 
