@@ -54,6 +54,23 @@ pub fn parseNumericLiteral(parser: *Parser) Error!?ast.NodeIndex {
 }
 
 pub fn parseRegExpLiteral(parser: *Parser) Error!?ast.NodeIndex {
+    if (parser.batchMode() and !parser.array_window and
+        parser.current_token.tag == .regex_literal)
+    {
+        // the collected stream already holds the regex as one token
+        const token = parser.current_token;
+        try parser.advance() orelse return null;
+        var flags_start = token.span.end;
+        while (flags_start > token.span.start and
+            std.ascii.isAlphabetic(parser.source[flags_start - 1])) flags_start -= 1;
+        return try parser.tree.addNode(.{ .regexp_literal = .{
+            .pattern = parser.tree.sourceSlice(token.span.start + 1, flags_start - 1),
+            .flags = parser.tree.sourceSlice(flags_start, token.span.end),
+        } }, token.span);
+    }
+
+    // a doomed speculation can re-read a collected division slash as a regex;
+    // rescan it and let the array window replay until it realigns
     std.debug.assert(parser.current_token.tag == .slash or
         parser.current_token.tag == .slash_assign);
     const token = parser.current_token;
@@ -179,22 +196,34 @@ pub fn parseTemplateParts(
         const substitution = try parseSubstitution(parser) orelse return null;
         try parser.scratch_b.append(parser.allocator(), substitution);
 
-        // the lexer emits `}` as a punctuator, rescan it as template continuation
-        if (parser.current_token.tag != .right_brace) {
-            try parser.reportExpected(
-                parser.current_token.span,
-                "Expected '}' to close the template placeholder",
-                .{},
-            );
-            return null;
-        }
+        var template_token: Token = undefined;
+        if (parser.batchMode() and !parser.array_window and
+            (parser.current_token.tag == .template_middle or
+                parser.current_token.tag == .template_tail))
+        {
+            // the collected stream holds the continuation token where the
+            // on-demand parse saw `}` and re-scanned it
+            template_token = parser.current_token;
+        } else {
+            // the lexer emits `}` as a punctuator, rescan it as template
+            // continuation; a doomed speculation may also re-read a collected
+            // `}` here, and the array window replays the rescan
+            if (parser.current_token.tag != .right_brace) {
+                try parser.reportExpected(
+                    parser.current_token.span,
+                    "Expected '}' to close the template placeholder",
+                    .{},
+                );
+                return null;
+            }
 
-        const template_token = parser.lexer.reScanTemplateContinuation(
-            parser.current_token.span.start,
-        ) catch |e| {
-            try parser.reportLexicalError(e);
-            return null;
-        };
+            template_token = parser.lexer.reScanTemplateContinuation(
+                parser.current_token.span.start,
+            ) catch |e| {
+                try parser.reportLexicalError(e);
+                return null;
+            };
+        }
         const is_tail = template_token.tag == .template_tail;
 
         try parser.scratch_a.append(
@@ -202,7 +231,11 @@ pub fn parseTemplateParts(
             try addTemplateElement(parser, template_token, is_tail, tagged),
         );
         end = template_token.span.end;
-        try parser.advanceWithRescannedToken(template_token) orelse return null;
+        if (parser.batchMode() and !parser.array_window) {
+            try parser.advance() orelse return null;
+        } else {
+            try parser.advanceWithRescannedToken(template_token) orelse return null;
+        }
 
         if (is_tail) break;
     }

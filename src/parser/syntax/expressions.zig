@@ -216,7 +216,7 @@ inline fn parsePrimaryExpression(parser: *Parser, precedence: u8) Error!?ast.Nod
         .null_literal => literals.parseNullLiteral(parser),
         .this => parseThisExpression(parser),
         .super => parseSuperExpression(parser),
-        .slash, .slash_assign => literals.parseRegExpLiteral(parser),
+        .slash, .slash_assign, .regex_literal => literals.parseRegExpLiteral(parser),
         .template_head => literals.parseTemplateLiteral(parser, false),
         .no_substitution_template => literals.parseNoSubstitutionTemplate(parser, false),
         .left_bracket => parseArrayExpression(parser),
@@ -448,7 +448,9 @@ fn parseYieldExpression(parser: *Parser, options: ParseExpressionOptions) Error!
     var argument: ast.NodeIndex = .null;
     if (!parser.current_token.hasLineTerminatorBefore()) {
         switch (parser.current_token.tag) {
-            .eof, .right_brace, .right_paren, .right_bracket, .colon, .comma, .semicolon => {},
+            // in the collected stream the brace closing a template substitution
+            // is already the re-scanned continuation token
+            .eof, .right_brace, .right_paren, .right_bracket, .colon, .comma, .semicolon, .template_middle, .template_tail => {},
             else => {
                 // YieldExpression[?In]
                 argument = try parseExpression(parser, Precedence.Assignment, options) orelse

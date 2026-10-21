@@ -10,7 +10,15 @@ pub fn build(b: *std.Build) void {
         "codegen-source-maps",
         "Compile source-map support into the code generator (default true)",
     ) orelse true);
-    const config: ParserConfig = .{ .codegen_options = codegen_options.createModule() };
+    const batch_lexing = b.option(
+        bool,
+        "batch-lexing",
+        "Compile in the experimental batch lexing strategy (default false)",
+    ) orelse false;
+    const config: ParserConfig = .{
+        .codegen_options = codegen_options.createModule(),
+        .batch_lexing = batch_lexing,
+    };
 
     const util = createUtil(b, target, optimize);
     const parser = config.add(b, "parser", util);
@@ -66,6 +74,38 @@ pub fn build(b: *std.Build) void {
     }));
     fuzz.has_side_effects = true;
     b.step("fuzz", "Fuzz the JS/TS parser for crashes and memory bugs").dependOn(&fuzz.step);
+
+    // local dev harness: lex-strategy benchmark + batch/on-demand identity check;
+    // not part of the library test surface. The harness needs the batch strategy
+    // compiled in regardless of the global option.
+    var bench_config = config;
+    bench_config.batch_lexing = true;
+    const bench_parser = bench_config.add(b, null, createUtil(b, target, optimize));
+    const bench_exe = b.addExecutable(.{
+        .name = "parse-bench",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/parse_bench.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "parser", .module = bench_parser }},
+        }),
+    });
+    b.step("bench-parse", "Build the lex-strategy parse benchmark/verify harness")
+        .dependOn(&b.addInstallArtifact(bench_exe, .{}).step);
+
+    // the default (gate-off) build, for gating the default path against upstream
+    const gate_parser = config.add(b, null, createUtil(b, target, optimize));
+    const gate_exe = b.addExecutable(.{
+        .name = "parse-bench-gate",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/parse_bench.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "parser", .module = gate_parser }},
+        }),
+    });
+    b.step("bench-parse-gate", "Build the default-build parse benchmark for the upstream gate")
+        .dependOn(&b.addInstallArtifact(gate_exe, .{}).step);
 
     const codegen_reference = b.addExecutable(.{
         .name = "codegen-reference",
@@ -236,6 +276,7 @@ fn installAddon(
 
 const ParserConfig = struct {
     codegen_options: *std.Build.Module,
+    batch_lexing: bool,
 
     fn add(
         config: ParserConfig,
@@ -249,6 +290,8 @@ const ParserConfig = struct {
             .optimize = util.optimize,
             .imports = &.{.{ .name = "util", .module = util }},
         });
+        const parser_options = b.addOptions();
+        parser_options.addOption(bool, "batch_lexing", config.batch_lexing);
         const options: std.Build.Module.CreateOptions = .{
             .root_source_file = b.path("src/parser/root.zig"),
             .target = util.resolved_target,
@@ -257,6 +300,7 @@ const ParserConfig = struct {
                 .{ .name = "util", .module = util },
                 .{ .name = "spec", .module = spec },
                 .{ .name = "codegen_options", .module = config.codegen_options },
+                .{ .name = "parser_options", .module = parser_options.createModule() },
             },
         };
         const parser = if (name) |n| b.addModule(n, options) else b.createModule(options);
