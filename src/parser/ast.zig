@@ -2573,6 +2573,7 @@ pub const NodeData = union(enum) {
         .ts_undefined_keyword,
         .ts_string_keyword,
         .ts_number_keyword,
+        .ts_int_keyword,
         .ts_bigint_keyword,
         .ts_boolean_keyword,
         .ts_symbol_keyword,
