@@ -81,6 +81,7 @@ export class Analyzer {
   // the augmented binding comes first in a merge
   private merged = new Map<Binding, Binding[]>();
   private addedExports = new Map<Module, Map<string, Binding>>();
+  private definitions = new WeakMap<Binding, Definition | null>();
 
   constructor(options: AnalyzerOptions = {}) {
     this.wasm = options.wasm;
@@ -122,6 +123,7 @@ export class Analyzer {
     this.exportResolutions = new Map();
     this.merged = new Map();
     this.addedExports = new Map();
+    this.definitions = new WeakMap();
     const diagnostics: Diagnostic[] = [];
     for (const module of this.moduleByPath.values()) {
       diagnostics.push(...module.diagnostics);
@@ -184,6 +186,17 @@ export class Analyzer {
   /** @internal */
   _definitionOf(binding: Binding): Definition | null {
     this._link(binding.module);
+    // results are deterministic once linked, so they memoize per binding
+    // until the next relink
+    let result = this.definitions.get(binding);
+    if (result === undefined) {
+      result = this.resolveDefinition(binding);
+      this.definitions.set(binding, result);
+    }
+    return result;
+  }
+
+  private resolveDefinition(binding: Binding): Definition | null {
     const seen = new Set<Binding>();
     let current = binding;
     while (current.has(BindingFlags.Import)) {
@@ -231,7 +244,12 @@ export class Analyzer {
 
   private definition(module: Module, binding: Binding | null): Definition {
     const merged = binding === null ? undefined : this.merged.get(binding);
-    return { module, binding, augmentations: merged === undefined ? [] : merged.slice(1) };
+    return {
+      module,
+      binding,
+      symbol: binding,
+      augmentations: merged === undefined ? [] : merged.slice(1),
+    };
   }
 
   private augment(module: Module, binding: Binding): void {

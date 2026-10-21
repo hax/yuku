@@ -18,6 +18,7 @@ import type {
   TokenList,
 } from "../types";
 import type { Analyzer } from "./analyzer";
+import { createWireView, type WireView } from "./wire-read";
 
 /** Kinds and modifiers of a {@link Binding}, tested with `has` and `hasAll`. */
 export interface BindingFlagMap {
@@ -111,6 +112,8 @@ export interface ModuleFlags {
 export interface Definition {
   readonly module: Module;
   readonly binding: Binding | null;
+  /** Alias of {@link binding}, the name the wire API first shipped with. */
+  readonly symbol: Binding | null;
   /** The bindings that `declare module` blocks merge into it. */
   readonly augmentations: Binding[];
 }
@@ -222,6 +225,7 @@ export class Binding {
   readonly module: Module;
   readonly id: number;
   private semantic: Semantic;
+  private declarationIndexList: number[] | null = null;
 
   /** @internal */
   constructor(module: Module, semantic: Semantic, id: number) {
@@ -245,6 +249,17 @@ export class Binding {
     const out = new Array<Node>(symbol.declCount(this.id));
     for (let i = 0; i < out.length; i++) out[i] = symbol.declNode(this.id, i);
     return out;
+  }
+  /** The declaration name nodes by wire index, without decoding them. */
+  get declarationIndexes(): number[] {
+    // symbols are immutable once analyzed, the list memoizes per instance
+    if (this.declarationIndexList === null) {
+      const { symbol } = this.semantic;
+      const out = new Array<number>(symbol.declCount(this.id));
+      for (let i = 0; i < out.length; i++) out[i] = symbol.declNodeIndex(this.id, i);
+      this.declarationIndexList = out;
+    }
+    return this.declarationIndexList;
   }
   /** Its uses in this module. */
   get references(): Reference[] {
@@ -321,6 +336,10 @@ export class Reference {
   get binding(): Binding | null {
     const binding = this.semantic.reference.symbolId(this.id);
     return binding === null ? null : this.module.bindings[binding]!;
+  }
+  /** Alias of {@link binding}, kept for the wire API's existing consumers. */
+  get symbol(): Binding | null {
+    return this.binding;
   }
 }
 
@@ -479,6 +498,7 @@ export class Module {
   private exportMap: Map<string, Export> | null = null;
   private starExports: Export[] | null = null;
   private importByBinding: Map<Binding, Import> | null = null;
+  private wire: WireView | null = null;
 
   /** @internal */
   constructor(
@@ -526,6 +546,10 @@ export class Module {
   get bindings(): Binding[] {
     return (this.bindingRows ??= this.rows(Binding, this.semantic.symbol.count));
   }
+  /** Alias of {@link bindings}, kept for the wire API's existing consumers. */
+  get symbols(): Binding[] {
+    return this.bindings;
+  }
   /** Every name in use, in source order. */
   get references(): Reference[] {
     return (this.referenceRows ??= this.rows(Reference, this.semantic.reference.count));
@@ -563,9 +587,28 @@ export class Module {
     return this.referenceOf(node)?.binding ?? null;
   }
 
+  /** Alias of {@link bindingOf}, the name the wire API first shipped with. */
+  symbolOf(node: Node): Binding | null {
+    return this.bindingOf(node);
+  }
+
+  /** The index-native twin of {@link bindingOf}, for wire walks. */
+  symbolOfIndex(index: number): Binding | null {
+    const declared = this.declarationMap().get(index);
+    if (declared !== undefined) return this.bindings[declared]!;
+    const reference = this.referenceMap().get(index);
+    return reference === undefined ? null : this.references[reference]!.binding;
+  }
+
   referenceOf(node: Node): Reference | null {
     const index = this.decoded.indexOf(node);
     if (index === undefined) return null;
+    const reference = this.referenceMap().get(index);
+    return reference === undefined ? null : this.references[reference]!;
+  }
+
+  /** The index-native twin of {@link referenceOf}, for wire walks. */
+  referenceOfIndex(index: number): Reference | null {
     const reference = this.referenceMap().get(index);
     return reference === undefined ? null : this.references[reference]!;
   }
@@ -674,6 +717,14 @@ export class Module {
       undefined,
       new SemanticWalkContext(this),
     );
+  }
+
+  /**
+   * The read-only wire view behind walkWire and walkWireIndexes
+   * (./wire-walk) and the field readers (./wire-read). Semi-internal.
+   */
+  _wire(): WireView {
+    return (this.wire ??= createWireView(this.decoded, this.source));
   }
 
   /** Every node of the given types, in source order. */

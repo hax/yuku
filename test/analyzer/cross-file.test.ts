@@ -67,6 +67,7 @@ describe("resolveExport", () => {
     expect(lib.resolveExport("ns")).toEqual({
       module: analyzer.module("a.ts")!,
       binding: null,
+      symbol: null,
       augmentations: [],
     });
     expect(lib.resolveExport("default")).toBeNull();

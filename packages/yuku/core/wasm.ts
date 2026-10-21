@@ -81,7 +81,10 @@ export function run(
   const size = new DataView(memory.buffer).getUint32(result, true);
   const buffer = memory.buffer.slice(result + 4, result + 4 + size);
   free(result, 4 + size);
-  return decode(buffer, source, options.path || null, dialect?.shapes ?? null);
+  const decoded = decode(buffer, source, options.path || null, dialect?.shapes ?? null);
+  // the analyzer's wire read layer addresses the transfer buffer directly
+  Object.defineProperty(decoded, "wireBuffer", { value: buffer });
+  return decoded;
 }
 
 function instanceOf(module: WebAssembly.Module): Instance {

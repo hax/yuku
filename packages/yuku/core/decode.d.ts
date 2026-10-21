@@ -75,6 +75,8 @@ export interface Decoded extends ParseResult {
   parentIndex(index: number): number;
   startOf(index: number): number;
   endOf(index: number): number;
+  /** @internal The raw transfer buffer, read directly by the analyzer's wire layer. */
+  wireBuffer: ArrayBuffer;
 }
 
 export declare function decode(
