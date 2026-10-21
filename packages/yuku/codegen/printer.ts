@@ -179,6 +179,7 @@ const TYPE_CONTEXT = new Set([
   "TSUndefinedKeyword",
   "TSStringKeyword",
   "TSNumberKeyword",
+  "TSIntKeyword",
   "TSBigIntKeyword",
   "TSBooleanKeyword",
   "TSSymbolKeyword",
@@ -754,6 +755,8 @@ class NodePrinter extends Output implements Printer {
         return this.write("boolean");
       case "TSNumberKeyword":
         return this.write("number");
+      case "TSIntKeyword":
+        return this.write("int");
       case "FunctionDeclaration":
       case "FunctionExpression":
         return this.emitFunction(node as T.Function);
