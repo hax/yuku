@@ -133,6 +133,7 @@ export const ALIAS_GROUPS = {
     "TSUndefinedKeyword",
     "TSStringKeyword",
     "TSNumberKeyword",
+    "TSIntKeyword",
     "TSBigIntKeyword",
     "TSBooleanKeyword",
     "TSSymbolKeyword",

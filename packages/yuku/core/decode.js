@@ -182,17 +182,18 @@ const TokenKind = Object.freeze({
   Any: 2359443,
   Bigint: 2359444,
   Boolean: 2359445,
-  Never: 2359446,
-  Number: 2359447,
-  Object: 2359448,
-  String: 2359449,
-  Symbol: 2359450,
-  Undefined: 2359451,
-  Unknown: 2359452,
-  JSXIdentifier: 157,
-  JSXText: 158,
-  EOF: 159,
-  Invalid: 160,
+  Int: 2359446,
+  Never: 2359447,
+  Number: 2359448,
+  Object: 2359449,
+  String: 2359450,
+  Symbol: 2359451,
+  Undefined: 2359452,
+  Unknown: 2359453,
+  JSXIdentifier: 158,
+  JSXText: 159,
+  EOF: 160,
+  Invalid: 161,
 });
 const BindingFlags = Object.freeze({
   FunctionScopedVariable: 1 << 0,
@@ -416,6 +417,7 @@ const CHILD_SLOTS = [
   [],
   [],
   [],
+  [],
   [0, 1, 0, 2],
   [0, 1, 0, 2],
   [0, 1, 0, 2],
@@ -498,6 +500,7 @@ const IS_NODE = [
   true,
   false,
   false,
+  true,
   true,
   true,
   true,
@@ -846,6 +849,7 @@ function _decodeTSNullKeyword(decoder, i, b, flags, start, end, depth) { return 
 function _decodeTSUndefinedKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSUndefinedKeyword", start, end }; }
 function _decodeTSStringKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSStringKeyword", start, end }; }
 function _decodeTSNumberKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSNumberKeyword", start, end }; }
+function _decodeTSIntKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSIntKeyword", start, end }; }
 function _decodeTSBigintKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSBigIntKeyword", start, end }; }
 function _decodeTSBooleanKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSBooleanKeyword", start, end }; }
 function _decodeTSSymbolKeyword(decoder, i, b, flags, start, end, depth) { return { type: "TSSymbolKeyword", start, end }; }
@@ -1029,6 +1033,7 @@ const KIND_DECODERS = [
   _decodeTSUndefinedKeyword,
   _decodeTSStringKeyword,
   _decodeTSNumberKeyword,
+  _decodeTSIntKeyword,
   _decodeTSBigintKeyword,
   _decodeTSBooleanKeyword,
   _decodeTSSymbolKeyword,
@@ -1261,7 +1266,7 @@ return { type: "Literal", start, end, value: v, raw: r }; }
     case 66: { const f1 = _u32[b + 1], f2 = _u32[b + 2]; const r = { type: "VariableDeclaration", start, end, kind: VAR_KINDS[flags & 7], declarations: nodeArr(f1, f2, depth + 1) }; if (_isTs) { r.declare = !!(flags & 8); } return r; }
     case 67: { const f1 = _u32[b + 1], f2 = _u32[b + 2]; const r = { type: "VariableDeclarator", start, end, id: f1 !== NULL ? node(f1, depth + 1) : null, init: f2 !== NULL ? node(f2, depth + 1) : null }; if (_isTs) { r.definite = !!(flags & 1); } return r; }
     case 85: { const f1 = _u32[b + 1]; return { type: "TSTypeAnnotation", start, end, typeAnnotation: f1 !== NULL ? node(f1, depth + 1) : null }; }
-    case 100: { const f1 = _u32[b + 1], f2 = _u32[b + 2]; return { type: "TSTypeReference", start, end, typeName: f1 !== NULL ? node(f1, depth + 1) : null, typeArguments: f2 !== NULL ? node(f2, depth + 1) : null }; }
+    case 101: { const f1 = _u32[b + 1], f2 = _u32[b + 2]; return { type: "TSTypeReference", start, end, typeName: f1 !== NULL ? node(f1, depth + 1) : null, typeArguments: f2 !== NULL ? node(f2, depth + 1) : null }; }
     default: return KIND_DECODERS[tag](_decoder, i, b, flags, start, end, depth);
     }
   }
