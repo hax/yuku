@@ -191,20 +191,21 @@ pub const TokenTag = enum(u32) {
     any = 147 | Mask.IsKeyword | Mask.IsIdentifierLike,
     bigint = 148 | Mask.IsKeyword | Mask.IsIdentifierLike,
     boolean = 149 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    never = 150 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    number = 151 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    object = 152 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    string = 153 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    symbol = 154 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    undefined = 155 | Mask.IsKeyword | Mask.IsIdentifierLike,
-    unknown = 156 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    int = 150 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    never = 151 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    number = 152 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    object = 153 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    string = 154 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    symbol = 155 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    undefined = 156 | Mask.IsKeyword | Mask.IsIdentifierLike,
+    unknown = 157 | Mask.IsKeyword | Mask.IsIdentifierLike,
 
-    jsx_identifier = 157,
-    jsx_text = 158,
+    jsx_identifier = 158,
+    jsx_text = 159,
 
-    eof = 159,
+    eof = 160,
     /// Input that lookahead could not scan, left for the parse to report.
-    invalid = 160,
+    invalid = 161,
 
     pub fn precedence(self: TokenTag) u5 {
         return @intCast((@backingInt(self) >> Mask.PrecShift) & Mask.PrecOverlap);
