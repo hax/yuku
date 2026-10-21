@@ -1,8 +1,8 @@
 test/parser/misc/ts
 ===================
-Passed:       110/110 (100.00%)
+Passed:       111/111 (100.00%)
 Failed:       0
-AST mismatch: 0/110
+AST mismatch: 0/111
 
 ✓ test/parser/misc/ts/abstract-constructor-body.ts
 error: 'abstract' modifier cannot appear on a constructor declaration
@@ -283,6 +283,7 @@ error: An instantiation expression cannot be followed by a property access
    = help: Wrap the instantiation expression in parentheses
 
 
+✓ test/parser/misc/ts/int-keyword.ts
 ✓ test/parser/misc/ts/jsx-fused-angle-type-args.tsx
 ✓ test/parser/misc/ts/jsx-primary-expression.tsx
 error: JSX expressions must be parenthesized in this position in TypeScript
