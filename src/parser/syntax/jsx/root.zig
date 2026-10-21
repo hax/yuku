@@ -1,6 +1,7 @@
 const std = @import("std");
 const ast = @import("../../ast.zig");
 const Precedence = @import("../../token.zig").Precedence;
+const Token = @import("../../token.zig").Token;
 const TokenTag = @import("../../token.zig").TokenTag;
 const Parser = @import("../../parser.zig").Parser;
 const Error = @import("../../parser.zig").Error;
@@ -119,8 +120,12 @@ fn parseJsxOpeningElement(
     if (parser.tree.isTs() and ts.isAngleOpen(parser.current_token.tag)) {
         parser.setLexerMode(.normal);
         type_arguments = try ts.parseTypeArguments(parser);
-        parser.setLexerMode(.jsx_tag);
-        try parser.reScanCurrent() orelse return null;
+        // the collected stream already holds the tag-mode token here, unless
+        // the rescan window is replaying doomed speculation from the lexer
+        if (!parser.batchMode() or parser.array_window) {
+            parser.setLexerMode(.jsx_tag);
+            try parser.reScanCurrent() orelse return null;
+        }
     }
 
     const attributes = try parseJsxAttributes(parser) orelse return null;
@@ -252,7 +257,17 @@ fn parseJsxChildren(parser: *Parser, opening_end: u32) Error!?ast.IndexRange {
     var scan_from = opening_end;
 
     while (true) {
-        const text_token = parser.lexer.reScanJsxText(scan_from);
+        const text_token = if (parser.batchMode() and !parser.array_window) blk: {
+            // the collected stream holds the text as a jsx_text token right
+            // after the `>`; an empty run was never collected
+            const array = parser.token_array.?;
+            const next = array[@min(parser.read_index, array.len - 1)];
+            if (next.tag == .jsx_text and next.span.start == scan_from) break :blk next;
+            break :blk Token{
+                .span = .{ .start = scan_from, .end = scan_from },
+                .tag = .jsx_text,
+            };
+        } else parser.lexer.reScanJsxText(scan_from);
 
         if (text_token.len() > 0) {
             const span = text_token.span;
@@ -263,7 +278,13 @@ fn parseJsxChildren(parser: *Parser, opening_end: u32) Error!?ast.IndexRange {
             try parser.scratch_b.append(parser.allocator(), text_node);
         }
 
-        try parser.advanceWithRescannedToken(text_token) orelse return null;
+        if (parser.batchMode() and !parser.array_window) {
+            // past the `>`, then past the text run
+            if (text_token.len() > 0) try parser.advance() orelse return null;
+            try parser.advance() orelse return null;
+        } else {
+            try parser.advanceWithRescannedToken(text_token) orelse return null;
+        }
 
         const child = switch (parser.current_token.tag) {
             .less_than => if (parser.peekAhead().tag == .slash)

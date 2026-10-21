@@ -7,6 +7,11 @@ const ast = @import("ast.zig");
 const spec = @import("spec");
 const util = @import("util");
 
+/// Whether the experimental batch lexing strategy is compiled in
+/// (`-Dbatch-lexing`). When false, every batch code path folds away at
+/// comptime and the parser is exactly the on-demand one.
+pub const batch_lexing: bool = @import("parser_options").batch_lexing;
+
 const statements = @import("syntax/statements.zig");
 const Speculation = @import("syntax/ts/speculation.zig").Speculation;
 const grammar = @import("grammar.zig");
@@ -14,6 +19,16 @@ const comments = @import("comments.zig");
 
 /// How comments are collected and attached to their nodes.
 pub const CommentMode = enum { none, collect, attach };
+
+/// Where the parser gets its tokens.
+pub const LexStrategy = enum {
+    /// The parser drives the lexer, scanning tokens on demand.
+    on_demand,
+    /// Tokens are scanned up front into an array, which the parser then reads.
+    /// Experimental: the array comes from a collecting on-demand pass, so this
+    /// measures the shape of parsing from pre-scanned tokens, not a new lexer.
+    batch,
+};
 
 pub const Options = struct {
     /// How the source is parsed. `.commonjs` treats the top level as a function body.
@@ -26,6 +41,8 @@ pub const Options = struct {
     comments: CommentMode = .collect,
     /// Whether to keep every consumed token in `Tree.tokens`.
     tokens: bool = false,
+    /// Where the parser gets its tokens.
+    lex_strategy: LexStrategy = .on_demand,
 };
 
 pub const Context = packed struct {
@@ -87,8 +104,25 @@ pub const Parser = struct {
 
     ts_rejected_speculations: std.AutoHashMapUnmanaged(Speculation, void) = .empty,
 
+    // batch lexing: the pre-scanned stream, the read cursor into it, and the
+    // comments the collecting pass recorded
+    token_array: ?[]const Token = null,
+    read_index: u32 = 0,
+    carried_comments: []const ast.Comment = &.{},
+    // a split shift token (`>>` into `>` + `>`) replays on the lexer until its
+    // output lands back on an array boundary; only doomed speculation splits,
+    // since a successful angle-bracket parse committed the split tokens
+    array_window: bool = false,
+
     pub inline fn allocator(self: *Parser) std.mem.Allocator {
         return self.tree.allocator();
+    }
+
+    /// Whether this parser reads a pre-scanned token array. Comptime-false
+    /// unless built with `-Dbatch-lexing`, so the default build keeps no
+    /// batch code at all.
+    pub inline fn batchMode(self: *const Parser) bool {
+        return batch_lexing and self.token_array != null;
     }
 
     fn parse(self: *Parser) Error!ast.Tree {
@@ -130,10 +164,22 @@ pub const Parser = struct {
 
         self.tree.diagnostics = self.diagnostics;
         if (!self.preserve_parens) stripParenthesizedNodes(&self.tree);
-        const collected = self.lexer.comments.items;
-        if (self.comment_mode == .attach) comments.attach(&self.tree, collected) catch ast.outOfMemory();
-        self.tree.comments = collected;
-        if (self.collect_tokens) self.tree.tokens = self.tokens.items;
+        if (self.batchMode()) {
+            // attach mutates the list, so the carried comments need a private copy
+            if (self.comment_mode == .attach) {
+                const collected = self.allocator().dupe(ast.Comment, self.carried_comments) catch ast.outOfMemory();
+                comments.attach(&self.tree, collected) catch ast.outOfMemory();
+                self.tree.comments = collected;
+            } else {
+                self.tree.comments = self.carried_comments;
+            }
+            self.tree.tokens = self.token_array.?;
+        } else {
+            const collected = self.lexer.comments.items;
+            if (self.comment_mode == .attach) comments.attach(&self.tree, collected) catch ast.outOfMemory();
+            self.tree.comments = collected;
+            if (self.collect_tokens) self.tree.tokens = self.tokens.items;
+        }
         return self.tree;
     }
 
@@ -215,6 +261,9 @@ pub const Parser = struct {
     }
 
     pub inline fn setLexerMode(self: *Parser, mode: lexer.LexerMode) void {
+        // the array was scanned with the right modes already; the rescan window
+        // still serves from the lexer, which needs the real mode
+        if (batch_lexing and self.token_array != null and !self.array_window) return;
         self.lexer.mode = mode;
         self.lexer.fast_path = mode == .normal and !self.collect_tokens;
     }
@@ -269,10 +318,55 @@ pub const Parser = struct {
     /// Advances without the escaped-keyword check.
     pub inline fn advanceWithoutEscapeCheck(self: *Parser) Error!?void {
         self.prev_token_end = self.current_token.span.end;
+        if (self.batchMode()) {
+            @branchHint(.unlikely);
+            const array = self.token_array.?;
+            if (!self.array_window) {
+                self.current_token = self.arrayNext(array);
+                return;
+            }
+            // the window serves from the lexer until it realigns with the array
+            return self.advanceThroughWindow(array);
+        }
         if (self.lexer.tryNextToken(&self.current_token)) return;
         const leaving = self.current_token;
         if (!try self.nextTokenInto(&self.current_token)) return null;
         try self.commitToken(leaving);
+    }
+
+    /// Drops array entries the window already produced, then leaves the window
+    /// when the lexer lands exactly on an array boundary.
+    inline fn realignArrayWindow(self: *Parser, array: []const Token) void {
+        while (self.read_index < array.len - 1 and
+            array[self.read_index].span.end <= self.lexer.cursor)
+        {
+            self.read_index += 1;
+        }
+        if (self.lexer.mode == .normal and array[self.read_index].span.start == self.lexer.cursor) {
+            self.array_window = false;
+        }
+    }
+
+    /// Serves the next token from the lexer while the rescan window is open,
+    /// realigning with the array when the scanner lands on a boundary.
+    noinline fn advanceThroughWindow(self: *Parser, array: []const Token) Error!?void {
+        self.realignArrayWindow(array);
+        if (!self.array_window) {
+            self.current_token = self.arrayNext(array);
+            return;
+        }
+        if (!self.lexer.tryNextToken(&self.current_token)) {
+            if (!try self.nextTokenInto(&self.current_token)) return null;
+        }
+    }
+
+    /// The next unread token of the array, clamped at its trailing `eof`.
+    inline fn arrayNext(self: *Parser, array: []const Token) Token {
+        if (self.read_index < array.len - 1) {
+            defer self.read_index += 1;
+            return array[self.read_index];
+        }
+        return array[array.len - 1];
     }
 
     pub noinline fn reportEscapedKeyword(self: *Parser, span: ast.Span) Error!void {
@@ -304,6 +398,8 @@ pub const Parser = struct {
             .lexer_comments_len = self.lexer.comments.items.len,
             .current_token = self.current_token,
             .prev_token_end = self.prev_token_end,
+            .read_index = if (batch_lexing) self.read_index else 0,
+            .array_window = if (batch_lexing) self.array_window else false,
             .nodes_len = self.tree.nodes.len,
             .extras_len = self.tree.extras.items.len,
             .diagnostics_len = self.diagnostics.items.len,
@@ -322,6 +418,10 @@ pub const Parser = struct {
         self.lexer.comments.shrinkRetainingCapacity(cp.lexer_comments_len);
         self.current_token = cp.current_token;
         self.prev_token_end = cp.prev_token_end;
+        if (batch_lexing) {
+            self.read_index = cp.read_index;
+            self.array_window = cp.array_window;
+        }
         self.tree.nodes.shrinkRetainingCapacity(cp.nodes_len);
         self.tree.extras.shrinkRetainingCapacity(cp.extras_len);
         self.diagnostics.shrinkRetainingCapacity(cp.diagnostics_len);
@@ -336,17 +436,30 @@ pub const Parser = struct {
         state: lexer.LexerState,
         cursor: u32,
         comments_len: usize,
+        read_index: u32,
 
         pub inline fn next(self: *Peek) Token {
+            const parser = self.parser;
+            if (batch_lexing) {
+                if (parser.token_array) |array| {
+                    @branchHint(.unlikely);
+                    if (!parser.array_window) {
+                        const index = @min(parser.read_index, array.len - 1);
+                        parser.read_index = index + 1;
+                        return array[index];
+                    }
+                }
+            }
             var token: Token = undefined;
-            if (self.parser.lexer.tryNextToken(&token)) return token;
-            return self.parser.lexer.nextToken() catch Token.invalid(self.parser.lexer.cursor);
+            if (parser.lexer.tryNextToken(&token)) return token;
+            return parser.lexer.nextToken() catch Token.invalid(parser.lexer.cursor);
         }
 
         pub inline fn end(self: Peek) void {
             self.parser.lexer.state = self.state;
             self.parser.lexer.cursor = self.cursor;
             self.parser.lexer.comments.shrinkRetainingCapacity(self.comments_len);
+            if (batch_lexing) self.parser.read_index = self.read_index;
         }
     };
 
@@ -356,11 +469,28 @@ pub const Parser = struct {
             .state = self.lexer.state,
             .cursor = self.lexer.cursor,
             .comments_len = self.lexer.comments.items.len,
+            .read_index = if (batch_lexing) self.read_index else undefined,
         };
     }
 
     /// Replaces the current token with a re-scanned one and advances past it.
     pub inline fn advanceWithRescannedToken(self: *Parser, token: Token) Error!?void {
+        if (self.batchMode()) {
+            // in array mode only doomed speculation still rescans (angle-bracket
+            // splits, or regex/template rescans while the window is active);
+            // the lexer is left mid-stream, so the window replays until it
+            // realigns with the array
+            var rescanned = token;
+            if (token.span.start < self.current_token.span.end) {
+                std.debug.assert(token.span.start == self.current_token.span.start);
+                rescanned.flags |= newlineFlag(self.current_token);
+                self.array_window = true;
+            } else {
+                std.debug.assert(self.array_window);
+            }
+            self.current_token = rescanned;
+            return self.advance();
+        }
         var rescanned = token;
         // a rescan past the current token completes it, one inside it supersedes it
         if (token.span.start >= self.current_token.span.end) {
@@ -374,6 +504,9 @@ pub const Parser = struct {
 
     /// Re-tokenizes the current token in the current lexer mode.
     pub inline fn reScanCurrent(self: *Parser) Error!?void {
+        // outside the rescan window the collected stream already holds the
+        // mode-rescanned token
+        std.debug.assert(!self.batchMode() or self.array_window);
         const replaced = self.current_token;
         self.lexer.rewindTo(replaced.span.start);
         if (!try self.nextTokenInto(&self.current_token)) return null;
@@ -483,11 +616,17 @@ pub const Parser = struct {
 
     pub fn recover(self: *Parser, terminator: ?TokenTag) Error!void {
         while (self.current_token.tag != .eof) {
-            // a failed rescan leaves the lexer inside the current token, which is then stale
-            if (self.current_token.span.end <= self.lexer.cursor) {
-                try self.commitToken(self.current_token);
+            if (self.batchMode() and !self.array_window) {
+                self.current_token = self.arrayNext(self.token_array.?);
+            } else if (self.batchMode()) {
+                self.current_token = try self.recoverNextToken();
+            } else {
+                // a failed rescan leaves the lexer inside the current token, which is then stale
+                if (self.current_token.span.end <= self.lexer.cursor) {
+                    try self.commitToken(self.current_token);
+                }
+                self.current_token = try self.recoverNextToken();
             }
-            self.current_token = try self.recoverNextToken();
             if (self.current_token.tag == terminator) break;
             if (self.current_token.hasLineTerminatorBefore() and
                 self.current_token.tag.isKeyword()) break;
@@ -537,6 +676,8 @@ pub const Checkpoint = struct {
 
     current_token: Token,
     prev_token_end: u32,
+    read_index: u32,
+    array_window: bool,
 
     nodes_len: usize,
     extras_len: usize,
@@ -578,6 +719,9 @@ pub fn parse(
     source: []const u8,
     options: Options,
 ) Error!ast.Tree {
+    if (batch_lexing and options.lex_strategy == .batch) {
+        return parseBatch(child_allocator, source, options);
+    }
     var parser: Parser = .{
         .tree = ast.Tree.init(child_allocator, source),
         .source = source,
@@ -589,5 +733,62 @@ pub fn parse(
     };
     parser.tree.source_type = options.source_type;
     parser.tree.lang = options.lang;
+    return parser.parse();
+}
+
+/// Parses from a pre-scanned token array instead of driving the lexer. The array
+/// must be the stream a collecting parse consumed, ending with `eof`. `tokens`
+/// and `carried_comments` must outlive the returned tree.
+pub fn parseFromTokens(
+    child_allocator: std.mem.Allocator,
+    source: []const u8,
+    tokens: []const Token,
+    carried_comments: []const ast.Comment,
+    options: Options,
+) Error!ast.Tree {
+    if (!batch_lexing) return parse(child_allocator, source, options);
+    std.debug.assert(tokens.len > 0);
+    std.debug.assert(tokens[tokens.len - 1].tag == .eof);
+    var parser: Parser = .{
+        .tree = ast.Tree.init(child_allocator, source),
+        .source = source,
+        .preserve_parens = options.preserve_parens,
+        .comment_mode = options.comments,
+        .collect_tokens = false,
+        .lexer = undefined,
+        .current_token = Token.eof(0),
+        .token_array = tokens,
+        .carried_comments = carried_comments,
+    };
+    parser.tree.source_type = options.source_type;
+    parser.tree.lang = options.lang;
+    return parser.parse();
+}
+
+/// `parse` with `lex_strategy == .batch`: a collecting pass produces the token
+/// array, then the array drives a second parse.
+fn parseBatch(child_allocator: std.mem.Allocator, source: []const u8, options: Options) Error!ast.Tree {
+    var collect_options = options;
+    collect_options.tokens = true;
+    collect_options.lex_strategy = .on_demand;
+    var first = try parse(child_allocator, source, collect_options);
+    // lexical errors left no mark on the collected stream, so the second parse
+    // could not replay them; the first tree already says everything
+    if (first.diagnostics.items.len > 0) return first;
+    defer first.deinit();
+
+    var parser: Parser = .{
+        .tree = ast.Tree.init(child_allocator, source),
+        .source = source,
+        .preserve_parens = options.preserve_parens,
+        .comment_mode = options.comments,
+        .collect_tokens = false,
+        .lexer = undefined,
+        .current_token = Token.eof(0),
+    };
+    parser.tree.source_type = options.source_type;
+    parser.tree.lang = options.lang;
+    parser.token_array = parser.allocator().dupe(Token, first.tokens) catch ast.outOfMemory();
+    parser.carried_comments = parser.allocator().dupe(ast.Comment, first.comments) catch ast.outOfMemory();
     return parser.parse();
 }

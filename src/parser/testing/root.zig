@@ -7,4 +7,5 @@ test {
     _ = @import("cases/tokens.zig");
     _ = @import("cases/comments.zig");
     _ = @import("cases/codegen.zig");
+    _ = @import("cases/batch_lexing.zig");
 }
