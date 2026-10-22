@@ -384,6 +384,10 @@ pub const Parser = struct {
     /// Peeks the token after `current_token` without advancing. Use `beginPeek` for
     /// multi-token lookahead.
     pub inline fn peekAhead(self: *Parser) Token {
+        if (self.batchMode() and !self.array_window) {
+            const array = self.token_array.?;
+            return array[@min(self.read_index, array.len - 1)];
+        }
         var peek = self.beginPeek();
         defer peek.end();
         return peek.next();
@@ -651,12 +655,20 @@ pub const Parser = struct {
         std.debug.assert(self.tree.nodes.capacity == 0);
         const alloc = self.allocator();
         const source_len = self.source.len;
-        const is_small = source_len < 512_000;
-        const estimated_nodes = if (is_small) @max(256, source_len / 2) else source_len / 4;
-        const estimated_extra = if (is_small) source_len / 6 else source_len / 12;
+        if (self.batchMode()) {
+            // the token count is known exactly; nodes/tokens and extras/tokens
+            // measure 0.76-1.0 and 0.23-0.26 across real files
+            const tokens_len = self.token_array.?.len;
+            try self.tree.nodes.ensureTotalCapacity(alloc, tokens_len + tokens_len / 8);
+            try self.tree.extras.ensureTotalCapacity(alloc, tokens_len / 3 + 64);
+        } else {
+            const is_small = source_len < 512_000;
+            const estimated_nodes = if (is_small) @max(256, source_len / 2) else source_len / 4;
+            const estimated_extra = if (is_small) source_len / 6 else source_len / 12;
 
-        try self.tree.nodes.ensureTotalCapacity(alloc, estimated_nodes);
-        try self.tree.extras.ensureTotalCapacity(alloc, estimated_extra);
+            try self.tree.nodes.ensureTotalCapacity(alloc, estimated_nodes);
+            try self.tree.extras.ensureTotalCapacity(alloc, estimated_extra);
+        }
         try self.scratch_cover.items.ensureTotalCapacity(alloc, 256);
         try self.scratch_statements.items.ensureTotalCapacity(alloc, 256);
         try self.scratch_a.items.ensureTotalCapacity(alloc, 256);
