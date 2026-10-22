@@ -124,6 +124,50 @@ fn benchArray(
     });
 }
 
+/// Simulated end-to-end batch parse: a busy wait stands in for the batch lexer
+/// producing the array in `lex_ms` milliseconds, then the array parse runs.
+fn simBatch(
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    source: []const u8,
+    basename: []const u8,
+    lex_ms: u64,
+) !void {
+    var options = optionsFor(basename);
+    options.tokens = true;
+    var first = try parser.parse(gpa, source, options);
+    defer first.deinit();
+    if (first.diagnostics.items.len > 0) return error.CannotBenchmarkBatchOnErrorFiles;
+
+    var sink: usize = 0;
+    var best: u64 = std.math.maxInt(u64);
+    var iters: usize = 0;
+    const t0 = nowNs(io);
+    while (true) {
+        const s = nowNs(io);
+        while (nowNs(io) - s < lex_ns(lex_ms)) {
+            std.mem.doNotOptimizeAway(&sink);
+        }
+        var tree = try parser.parseFromTokens(gpa, source, first.tokens, first.comments, optionsFor(basename));
+        sink +%= tree.nodes.len;
+        tree.deinit();
+        const dt = nowNs(io) - s;
+        if (dt < best) best = dt;
+        iters += 1;
+        if (nowNs(io) - t0 >= 300_000_000 or iters >= 100) break;
+    }
+    std.mem.doNotOptimizeAway(&sink);
+    const mb = @as(f64, @floatFromInt(source.len)) / 1e6;
+    const secs = @as(f64, @floatFromInt(best)) / 1e9;
+    std.debug.print("{s}\tsim\t{d:.2}ms\t{d:.0}MB/s\t(lex={d}ms, {d} iters)\n", .{
+        basename, secs * 1000, mb / secs, lex_ms, iters,
+    });
+}
+
+fn lex_ns(lex_ms: u64) u64 {
+    return lex_ms * 1_000_000;
+}
+
 fn verify(gpa: std.mem.Allocator, source: []const u8, basename: []const u8) !void {
     var expected = try parser.parse(gpa, source, optionsFor(basename));
     defer expected.deinit();
@@ -206,8 +250,9 @@ fn verify(gpa: std.mem.Allocator, source: []const u8, basename: []const u8) !voi
         if (!std.meta.eql(a, b)) return reportMismatch(basename, "tokens");
     }
 
-    std.debug.print("{s}\tverify\tok\t{d} nodes\t{d} tokens\t{d} comments\n", .{
-        basename, expected.nodes.len, actual.tokens.len, actual.comments.len,
+    std.debug.print("{s}\tverify\tok\t{d} nodes\t{d} tokens\t{d} comments\t{d} extras\n", .{
+        basename,                  expected.nodes.len, actual.tokens.len, actual.comments.len,
+        expected.extras.items.len,
     });
 }
 
@@ -225,6 +270,10 @@ pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();
     _ = args.skip();
     const mode = args.next() orelse return error.MissingMode;
+    const sim_ms: ?u64 = if (std.mem.eql(u8, mode, "sim"))
+        try std.fmt.parseUnsigned(u64, args.next() orelse return error.MissingLexMs, 10)
+    else
+        null;
 
     while (args.next()) |path| {
         const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024 * 1024));
@@ -235,6 +284,12 @@ pub fn main(init: std.process.Init) !void {
             verify(gpa, source, basename) catch |err| {
                 if (err != error.BatchMismatch) return err;
             };
+            continue;
+        }
+
+        if (sim_ms) |ms| {
+            try bench(io, gpa, "parse", source, basename, parseOnce);
+            try simBatch(io, gpa, source, basename, ms);
             continue;
         }
 
