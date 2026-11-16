@@ -754,9 +754,10 @@ fn parseUpdateExpressionImpl(parser: *Parser, prefix: bool, left: ast.NodeIndex)
     const unwrapped = static_semantics.unwrapParens(&parser.tree, argument);
 
     if (!isSimpleAssignmentTarget(parser, unwrapped)) {
+        const optional_chain = isOptionalChainOperand(parser, unwrapped);
         try parser.report(
             argument_span,
-            if (parser.tree.data(unwrapped) == .chain_expression)
+            if (optional_chain)
                 "The operand of an increment or decrement operator may not be an optional" ++
                     " property access"
             else
@@ -764,7 +765,14 @@ fn parseUpdateExpressionImpl(parser: *Parser, prefix: bool, left: ast.NodeIndex)
                     " property access",
             .{},
         );
-        return null;
+        // Optional chains keep the old failure path: tsc reports its dedicated
+        // grammar code for the whole shape and no operand-type diagnostic, which
+        // this parser has no code to express yet (tracked separately). Any other
+        // non-simple target is accepted syntactically by tsc, whose checker adds
+        // the operand-type diagnostics next to the grammar error; keeping the node
+        // here lets callers do the same and stops error recovery from swallowing
+        // the statements that follow.
+        if (optional_chain) return null;
     }
 
     const span: ast.Span = if (prefix)
@@ -777,6 +785,23 @@ fn parseUpdateExpressionImpl(parser: *Parser, prefix: bool, left: ast.NodeIndex)
         .operator = ast.UpdateOperator.fromToken(operator_token.tag),
         .prefix = prefix,
     } }, span);
+}
+
+/// Whether the update operand's outermost expression is an optional chain, looking
+/// through parentheses and the transparent TypeScript assertion wrappers the same
+/// way `isSimpleAssignmentTarget` does.
+fn isOptionalChainOperand(parser: *Parser, index: ast.NodeIndex) bool {
+    var cur = static_semantics.unwrapParens(&parser.tree, index);
+    while (true) {
+        switch (parser.tree.data(cur)) {
+            .ts_non_null_expression => |wrapper| cur = wrapper.expression,
+            .ts_as_expression => |wrapper| cur = wrapper.expression,
+            .ts_satisfies_expression => |wrapper| cur = wrapper.expression,
+            .ts_type_assertion => |wrapper| cur = wrapper.expression,
+            else => return parser.tree.data(cur) == .chain_expression,
+        }
+        cur = static_semantics.unwrapParens(&parser.tree, cur);
+    }
 }
 
 inline fn parseBinaryExpression(
