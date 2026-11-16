@@ -1,0 +1,240 @@
+{
+  "program": {
+    "type": "Program",
+    "start": 0,
+    "end": 496,
+    "sourceType": "script",
+    "hashbang": null,
+    "body": [
+      {
+        "type": "ExpressionStatement",
+        "start": 383,
+        "end": 388,
+        "expression": {
+          "type": "UpdateExpression",
+          "start": 383,
+          "end": 387,
+          "argument": {
+            "type": "Literal",
+            "start": 385,
+            "end": 387,
+            "value": "",
+            "raw": "\"\""
+          },
+          "operator": "++",
+          "prefix": true
+        }
+      },
+      {
+        "type": "ExpressionStatement",
+        "start": 389,
+        "end": 394,
+        "expression": {
+          "type": "UpdateExpression",
+          "start": 389,
+          "end": 393,
+          "argument": {
+            "type": "Literal",
+            "start": 389,
+            "end": 391,
+            "value": "",
+            "raw": "\"\""
+          },
+          "operator": "--",
+          "prefix": false
+        }
+      },
+      {
+        "type": "ExpressionStatement",
+        "start": 395,
+        "end": 399,
+        "expression": {
+          "type": "UpdateExpression",
+          "start": 395,
+          "end": 398,
+          "argument": {
+            "type": "Literal",
+            "start": 397,
+            "end": 398,
+            "value": 1,
+            "raw": "1"
+          },
+          "operator": "++",
+          "prefix": true
+        }
+      },
+      {
+        "type": "ExpressionStatement",
+        "start": 400,
+        "end": 410,
+        "expression": {
+          "type": "UpdateExpression",
+          "start": 400,
+          "end": 409,
+          "argument": {
+            "type": "BinaryExpression",
+            "start": 403,
+            "end": 408,
+            "left": {
+              "type": "Identifier",
+              "start": 403,
+              "end": 404,
+              "name": "a"
+            },
+            "right": {
+              "type": "Identifier",
+              "start": 407,
+              "end": 408,
+              "name": "b"
+            },
+            "operator": "+"
+          },
+          "operator": "++",
+          "prefix": true
+        }
+      },
+      {
+        "type": "ExpressionStatement",
+        "start": 411,
+        "end": 417,
+        "expression": {
+          "type": "UpdateExpression",
+          "start": 411,
+          "end": 416,
+          "argument": {
+            "type": "CallExpression",
+            "start": 411,
+            "end": 414,
+            "callee": {
+              "type": "Identifier",
+              "start": 411,
+              "end": 412,
+              "name": "f"
+            },
+            "arguments": [],
+            "optional": false
+          },
+          "operator": "++",
+          "prefix": false
+        }
+      },
+      {
+        "type": "ExpressionStatement",
+        "start": 485,
+        "end": 495,
+        "expression": {
+          "type": "CallExpression",
+          "start": 485,
+          "end": 494,
+          "callee": {
+            "type": "MemberExpression",
+            "start": 485,
+            "end": 492,
+            "object": {
+              "type": "Literal",
+              "start": 485,
+              "end": 487,
+              "value": "",
+              "raw": "\"\""
+            },
+            "property": {
+              "type": "Identifier",
+              "start": 488,
+              "end": 492,
+              "name": "trim"
+            },
+            "computed": false,
+            "optional": false
+          },
+          "arguments": [],
+          "optional": false
+        }
+      }
+    ]
+  },
+  "comments": [
+    {
+      "type": "Line",
+      "value": " A non-simple assignment target in a prefix or postfix update expression is an",
+      "start": 0,
+      "end": 80
+    },
+    {
+      "type": "Line",
+      "value": " early error. The parser keeps the `update_expression` node after reporting it,",
+      "start": 81,
+      "end": 162
+    },
+    {
+      "type": "Line",
+      "value": " so callers can still see the operand and report the type-level diagnostics tsc",
+      "start": 163,
+      "end": 244
+    },
+    {
+      "type": "Line",
+      "value": " reports for the same shape (TS2356/TS2357). Keeping the node also keeps error",
+      "start": 245,
+      "end": 325
+    },
+    {
+      "type": "Line",
+      "value": " recovery from swallowing the statements that follow.",
+      "start": 326,
+      "end": 381
+    },
+    {
+      "type": "Line",
+      "value": " The statement after an invalid update expression still parses.",
+      "start": 419,
+      "end": 484
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "error",
+      "message": "The operand of an increment or decrement operator must be a variable or a property access",
+      "path": null,
+      "start": 385,
+      "end": 387,
+      "labels": [],
+      "help": null
+    },
+    {
+      "severity": "error",
+      "message": "The operand of an increment or decrement operator must be a variable or a property access",
+      "path": null,
+      "start": 389,
+      "end": 391,
+      "labels": [],
+      "help": null
+    },
+    {
+      "severity": "error",
+      "message": "The operand of an increment or decrement operator must be a variable or a property access",
+      "path": null,
+      "start": 397,
+      "end": 398,
+      "labels": [],
+      "help": null
+    },
+    {
+      "severity": "error",
+      "message": "The operand of an increment or decrement operator must be a variable or a property access",
+      "path": null,
+      "start": 402,
+      "end": 409,
+      "labels": [],
+      "help": null
+    },
+    {
+      "severity": "error",
+      "message": "The operand of an increment or decrement operator must be a variable or a property access",
+      "path": null,
+      "start": 411,
+      "end": 414,
+      "labels": [],
+      "help": null
+    }
+  ]
+}

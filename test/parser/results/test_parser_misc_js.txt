@@ -1,8 +1,8 @@
 test/parser/misc/js
 ===================
-Passed:       80/80 (100.00%)
+Passed:       81/81 (100.00%)
 Failed:       0
-AST mismatch: 0/80
+AST mismatch: 0/81
 
 ✓ test/parser/misc/js/accessor-line-terminator.js
 ✓ test/parser/misc/js/arrow-parameter-parenthesized-with-computed-key.js
@@ -396,6 +396,15 @@ error: Tagged template expressions are not permitted in an optional chain
 
 
 ✓ test/parser/misc/js/tagged-template.js
+✓ test/parser/misc/js/update-expression-invalid-target.js
+error: The operand of an increment or decrement operator must be a variable or a property access
+   |
+ 6 | 
+ 7 | ++"";
+   |   ^^
+ 8 | ""--;
+   |
+
 ✓ test/parser/misc/js/using-export.module.js
 error: Expected a declaration after 'export', but found 'using'
    |
