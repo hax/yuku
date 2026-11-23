@@ -278,9 +278,19 @@ pub fn parsePropertyKey(
         try literals.parseStringLiteral(parser) orelse return null
     else if (token.tag.isNumericLiteral())
         try literals.parseNumericLiteral(parser) orelse return null
-    else if (owner == .class and token.tag == .private_identifier)
-        try literals.parsePrivateIdentifier(parser) orelse return null
-    else {
+    else if (token.tag == .private_identifier) blk: {
+        // A private name is only legal in a class body. Keep it as the name so the
+        // member, the object literal and everything after it still reach the AST,
+        // and report the placement instead of failing the enclosing construct
+        // (tsc reports TS18016 here and keeps checking).
+        const name = try literals.parsePrivateIdentifier(parser) orelse return null;
+        if (owner != .class) try parser.report(
+            parser.tree.span(name),
+            "Private identifiers are not allowed outside class bodies",
+            .{ .help = "Move the private name into a class body, or use a normal property name" },
+        );
+        break :blk name;
+    } else {
         const message, const help = switch (owner) {
             .object => .{
                 "Expected a property name",

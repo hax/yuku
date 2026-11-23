@@ -311,6 +311,19 @@ pub inline fn parseBindingIdentifier(parser: *Parser) Error!?ast.NodeIndex {
     );
 }
 
+/// A private name placed where only a binding name is allowed (variable
+/// declarations, parameters). Recovery only: the caller reports the placement.
+pub inline fn parsePrivateBindingIdentifier(parser: *Parser) Error!?ast.NodeIndex {
+    std.debug.assert(parser.current_token.tag == .private_identifier);
+    const token = parser.current_token;
+    try parser.advance() orelse return null;
+
+    return try parser.tree.addNode(
+        .{ .binding_identifier = .{ .name = try parser.identifierName(token) } },
+        token.span,
+    );
+}
+
 pub inline fn parsePrivateIdentifier(parser: *Parser) Error!?ast.NodeIndex {
     std.debug.assert(parser.current_token.tag == .private_identifier);
     const token = parser.current_token;

@@ -323,7 +323,17 @@ fn parseFormalParameterImpl(
     else
         ParameterPropertyModifiers{};
 
-    var pattern = try patterns.parseBindingPattern(parser) orelse return null;
+    var pattern = if (is_ts and parser.current_token.tag == .private_identifier) blk: {
+        // tsc recovers a private name used as a parameter name (TS18009): keep the
+        // binding so the parameter list and everything after it still parse.
+        const binding = try literals.parsePrivateBindingIdentifier(parser) orelse return null;
+        try parser.report(
+            parser.tree.span(binding),
+            "Private identifiers cannot be used as parameters",
+            .{ .help = "Name the parameter with a normal identifier" },
+        );
+        break :blk binding;
+    } else try patterns.parseBindingPattern(parser) orelse return null;
 
     if (modifiers.present and patterns.isDestructuringPattern(parser, pattern)) {
         try parser.report(

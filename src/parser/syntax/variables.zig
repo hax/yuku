@@ -7,6 +7,7 @@ const Precedence = @import("../token.zig").Precedence;
 const TokenTag = @import("../token.zig").TokenTag;
 
 const expressions = @import("expressions.zig");
+const literals = @import("literals.zig");
 const patterns = @import("patterns.zig");
 const ts = @import("ts/types.zig");
 
@@ -109,7 +110,17 @@ fn parseVariableDeclaratorImpl(
     context: DeclaratorContext,
 ) Error!?ast.NodeIndex {
     const start = parser.current_token.span.start;
-    var id = try patterns.parseBindingPattern(parser) orelse return null;
+    var id = if (parser.tree.isTs() and parser.current_token.tag == .private_identifier) blk: {
+        // tsc recovers a private name used as a declared name (TS18029): keep the
+        // binding so the declarator and the following statements still parse.
+        const binding = try literals.parsePrivateBindingIdentifier(parser) orelse return null;
+        try parser.report(
+            parser.tree.span(binding),
+            "Private identifiers are not allowed in variable declarations",
+            .{ .help = "Declare a normal identifier and store the private name some other way" },
+        );
+        break :blk binding;
+    } else try patterns.parseBindingPattern(parser) orelse return null;
     const id_span = parser.tree.span(id);
 
     var definite = false;

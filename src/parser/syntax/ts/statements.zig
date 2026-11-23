@@ -490,6 +490,17 @@ fn parseEnumMemberName(parser: *Parser) Error!?struct { ast.NodeIndex, bool } {
         const id = try literals.parseIdentifierName(parser) orelse return null;
         return .{ id, false };
     }
+    if (tag == .private_identifier) {
+        // tsc keeps the private name and reports TS18024, so the enum body and
+        // every later statement still parse (issue #9).
+        const id = try literals.parsePrivateIdentifier(parser) orelse return null;
+        try parser.report(
+            parser.tree.span(id),
+            "An enum member cannot be named with a private identifier",
+            .{ .help = "Name the member with an identifier or a string literal" },
+        );
+        return .{ id, false };
+    }
     if (tag == .string_literal) {
         const id = try literals.parseStringLiteral(parser) orelse return null;
         const name = parser.tree.string(parser.tree.data(id).string_literal.value);
