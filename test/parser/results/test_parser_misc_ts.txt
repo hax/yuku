@@ -1,8 +1,8 @@
 test/parser/misc/ts
 ===================
-Passed:       111/111 (100.00%)
+Passed:       112/112 (100.00%)
 Failed:       0
-AST mismatch: 0/111
+AST mismatch: 0/112
 
 ✓ test/parser/misc/ts/abstract-constructor-body.ts
 error: 'abstract' modifier cannot appear on a constructor declaration
@@ -331,6 +331,15 @@ error: A namespace declaration requires a body
 ✓ test/parser/misc/ts/new-expression-non-null-callee.ts
 ✓ test/parser/misc/ts/optional-chain-call-fused-angle.ts
 ✓ test/parser/misc/ts/optional-chain-instantiation-fused-angle.ts
+✓ test/parser/misc/ts/parameter-modifier-outside-constructor.ts
+error: A parameter property is only allowed in a constructor implementation
+   |
+ 6 | // parameter start stays a plain parameter name.
+ 7 | function f1(private x: number) {}
+   |             ^^^^^^^^^^^^^^^^^
+ 8 | function f2(readonly x) {}
+   |
+
 ✓ test/parser/misc/ts/parameter-pattern-decorators.ts
 ✓ test/parser/misc/ts/parameter-property-binding-pattern.ts
 error: A parameter property may not be declared using a binding pattern

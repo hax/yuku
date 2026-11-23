@@ -294,13 +294,22 @@ fn parseParenthesizedOrArrowFunctionImpl(
 
     if (parser.tree.isTs() and precedence <= Precedence.Assignment) {
         switch (ts.classifyArrowHead(parser)) {
-            .yes => return ts.parseArrow(
-                parser,
-                false,
-                start,
-                .{ .allow_in = options.allow_in },
-                false,
-            ),
+            .yes => {
+                // committed, so recovery diagnostics survive — but rewind and fall
+                // through to the expression reading when the head turns out not to
+                // be an arrow after all (e.g. `(readonly x)` with no `=>`)
+                const cp = parser.checkpoint();
+                if (try ts.parseArrow(
+                    parser,
+                    false,
+                    start,
+                    .{ .allow_in = options.allow_in },
+                    false,
+                )) |arrow| {
+                    return arrow;
+                }
+                parser.rewind(cp);
+            },
             .maybe => if (try ts.tryParseArrow(parser, false, start, options)) |arrow| {
                 return arrow;
             },
@@ -385,13 +394,26 @@ fn parseAsyncFunctionOrArrowImpl(
         // an async head can still be a call, so even a sure arrow is only tried
         const arrow_head = ts.classifyArrowHead(parser);
         if (precedence <= Precedence.Assignment and arrow_head != .no) {
-            const arrow_options: ParseExpressionOptions = if (arrow_head == .yes)
-                .{ .allow_in = options.allow_in }
-            else
-                options;
-            if (try ts.tryParseArrow(parser, true, start, arrow_options)) |arrow| {
-                try parser.reportIfEscapedKeyword(async_token);
-                return arrow;
+            // a head opening with a parameter-property modifier can never be a call:
+            // parse committed so the modifier recovery diagnostics survive. Rewind on
+            // failure — the tokens are consumed and a bare parseCover here would read
+            // the wrong token — and let the call reading below report instead.
+            if (functions.headBeginsWithParameterPropertyModifier(parser)) {
+                const cp = parser.checkpoint();
+                if (try ts.parseArrow(parser, true, start, .{ .allow_in = options.allow_in }, false)) |arrow| {
+                    try parser.reportIfEscapedKeyword(async_token);
+                    return arrow;
+                }
+                parser.rewind(cp);
+            } else {
+                const arrow_options: ParseExpressionOptions = if (arrow_head == .yes)
+                    .{ .allow_in = options.allow_in }
+                else
+                    options;
+                if (try ts.tryParseArrow(parser, true, start, arrow_options)) |arrow| {
+                    try parser.reportIfEscapedKeyword(async_token);
+                    return arrow;
+                }
             }
         }
 

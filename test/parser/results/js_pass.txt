@@ -1,6 +1,6 @@
 test/parser/suite/js/pass
 =========================
-Passed:       38977/38977 (100.00%)
+Passed:       38987/38987 (100.00%)
 Failed:       0
 AST mismatch: 0/38779
 
@@ -13571,6 +13571,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/5899ab612dc0fc72.js
 ✓ test/parser/suite/js/pass/5899ce4ad1f9b726.js
 ✓ test/parser/suite/js/pass/589abaf95d9ba211.js
+✓ test/parser/suite/js/pass/589b486b360a0344.js
 ✓ test/parser/suite/js/pass/589bbadf67a3d481.js
 ✓ test/parser/suite/js/pass/589dc8ad3b9aa28f.js
 ✓ test/parser/suite/js/pass/589e82db018e6e00.js
@@ -16953,6 +16954,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/6fea0c6cef1c4554.js
 ✓ test/parser/suite/js/pass/6febb71cc0c1c334.js
 ✓ test/parser/suite/js/pass/6fec9459f9ccd1aa.js
+✓ test/parser/suite/js/pass/6feff777b3cb39f3.js
 ✓ test/parser/suite/js/pass/6ff1c9ebda75d625.js
 ✓ test/parser/suite/js/pass/6ff355d0fc5d148a.js
 ✓ test/parser/suite/js/pass/6ff3785764f76f08.js
@@ -21235,6 +21237,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/8cb9887c27953c22.js
 ✓ test/parser/suite/js/pass/8cb9f4e28377c3ba.js
 ✓ test/parser/suite/js/pass/8cbcc2dce69d034d.js
+✓ test/parser/suite/js/pass/8cbf492612a04f6c.module.js
 ✓ test/parser/suite/js/pass/8cc10f9978dedbdb.js
 ✓ test/parser/suite/js/pass/8cc2bcc78b0c0bd4.js
 ✓ test/parser/suite/js/pass/8cc2f9629dce7b4e.js
@@ -23447,6 +23450,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/9b2f2de2e211f2b7.js
 ✓ test/parser/suite/js/pass/9b2f7eb0766018a3.js
 ✓ test/parser/suite/js/pass/9b3224899150b112.js
+✓ test/parser/suite/js/pass/9b349c9d467d8432.js
 ✓ test/parser/suite/js/pass/9b36c74c5534301c.js
 ✓ test/parser/suite/js/pass/9b393d643d861adf.js
 ✓ test/parser/suite/js/pass/9b39eb483c3e8390.js
@@ -24600,6 +24604,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/a26f9725a7e7dcb3.js
 ✓ test/parser/suite/js/pass/a2703114abc05b2e.js
 ✓ test/parser/suite/js/pass/a27135b0c1197a9b.js
+✓ test/parser/suite/js/pass/a2720cc2e6358cc0.module.js
 ✓ test/parser/suite/js/pass/a27231f33c99241e.js
 ✓ test/parser/suite/js/pass/a2729141c023b940.js
 ✓ test/parser/suite/js/pass/a272dcde015e86ec.js
@@ -25709,6 +25714,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/a99668c883a78991.js
 ✓ test/parser/suite/js/pass/a99756486b400284.js
 ✓ test/parser/suite/js/pass/a99a9b518a7cfd5f.js
+✓ test/parser/suite/js/pass/a99b383edf0539b7.js
 ✓ test/parser/suite/js/pass/a99c3414f2e40977.js
 ✓ test/parser/suite/js/pass/a9a11fa96f783197.js
 ✓ test/parser/suite/js/pass/a9a6380fc791a1ae.js
@@ -27180,6 +27186,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/b3474904d2f4d7bf.js
 ✓ test/parser/suite/js/pass/b34765b9525a2ee7.js
 ✓ test/parser/suite/js/pass/b347888b49c827c0.js
+✓ test/parser/suite/js/pass/b349c9d467d8432f.module.js
 ✓ test/parser/suite/js/pass/b34cb459384347ed.js
 ✓ test/parser/suite/js/pass/b34e26ecd9481f0d.js
 ✓ test/parser/suite/js/pass/b34f16abb9b092ff.js
@@ -31709,6 +31716,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/d072a8bf6375cfb6.js
 ✓ test/parser/suite/js/pass/d073a183d3715b49.js
 ✓ test/parser/suite/js/pass/d07437813e1ed2f0.js
+✓ test/parser/suite/js/pass/d07a5e9742f79c27.js
 ✓ test/parser/suite/js/pass/d07d33560353ae77.js
 ✓ test/parser/suite/js/pass/d0804b4856dbb6be.js
 ✓ test/parser/suite/js/pass/d08139646491e6ba.js
@@ -33535,6 +33543,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/dc81b77a8111eea0.js
 ✓ test/parser/suite/js/pass/dc85fa367ba0c663.js
 ✓ test/parser/suite/js/pass/dc874f3b1595e556.js
+✓ test/parser/suite/js/pass/dc8a7c46e36bd785.module.js
 ✓ test/parser/suite/js/pass/dc8bbc228715d618.js
 ✓ test/parser/suite/js/pass/dc8bf528a8613eda.js
 ✓ test/parser/suite/js/pass/dc8dd1327272c519.js
@@ -37733,6 +37742,7 @@ AST mismatch: 0/38779
 ✓ test/parser/suite/js/pass/f81f6d495ddcb66b.js
 ✓ test/parser/suite/js/pass/f8241b7342d8fb5a.js
 ✓ test/parser/suite/js/pass/f824751e755ec690.js
+✓ test/parser/suite/js/pass/f828a0b861ddcd7a.js
 ✓ test/parser/suite/js/pass/f82941e4a638f0ff.js
 ✓ test/parser/suite/js/pass/f82c0e3e810c9ed6.js
 ✓ test/parser/suite/js/pass/f82c3fc3d81b9c7a.js

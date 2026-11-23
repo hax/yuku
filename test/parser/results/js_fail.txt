@@ -1,6 +1,6 @@
 test/parser/suite/js/fail
 =========================
-Passed:       5267/5267 (100.00%)
+Passed:       5273/5273 (100.00%)
 Failed:       0
 
 ✓ test/parser/suite/js/fail/00128c2237478f9e.js
@@ -1157,6 +1157,14 @@ error: Expected an expression, but found '='
    |
  1 | await = foo();
    |       ^
+ 2 | 
+   |
+
+✓ test/parser/suite/js/fail/05237f9355e6d8d2.module.js
+error: Expected an expression, but found '.'
+   |
+ 1 | class A extends module {}.x {}
+   |                          ^
  2 | 
    |
 
@@ -5313,6 +5321,16 @@ error: A rest element must be last in a destructuring pattern
  3 | callCount = callCount + 1;
    |
    = help: Move the rest element to the end
+
+
+✓ test/parser/suite/js/fail/1b86ee50fdeeee33.js
+error: Expected an identifier, but found '%'
+   |
+ 1 | import %%A%% from "a";
+   |        ^
+ 2 | 
+   |
+   = help: Identifiers start with a letter, '_', or '$'
 
 
 ✓ test/parser/suite/js/fail/1b87f4048bac9335.js
@@ -18422,6 +18440,16 @@ error: Expected an expression, but found ')'
  3 | }
    |
 
+✓ test/parser/suite/js/fail/601097fcbeb0f035.module.js
+error: Expected ',' or ')' in the parenthesized expression, but found '{'
+   |
+ 1 | class A extends (module {}) {}
+   |                         ^
+ 2 | class B extends f(module {}) {}
+   |
+   = help: Separate the expressions with ','
+
+
 ✓ test/parser/suite/js/fail/6028f32e7201e10b.js
 error: Classes may not have a static property named 'prototype'
    |
@@ -31102,6 +31130,16 @@ error: 'import' is a reserved word and cannot be used as an identifier
  2 | 
    |
 
+✓ test/parser/suite/js/fail/a48b4e02c9c3cbad.js
+error: Expected an identifier, but found '%'
+   |
+ 1 | import %%FILE%%;
+   |        ^
+ 2 | 
+   |
+   = help: Identifiers start with a letter, '_', or '$'
+
+
 ✓ test/parser/suite/js/fail/a4a983d8d6e7e825.js
 error: Numeric separators are only allowed between two digits
    |
@@ -36018,6 +36056,16 @@ error: 'yield' is a reserved word in generators and cannot be used as an identif
  4 |   }
    |
 
+✓ test/parser/suite/js/fail/be2cdea4916ed926.module.js
+error: Expected ';' after the statement, but found '{'
+   |
+ 1 | new module {};
+   |            ^
+ 2 | new new module {};
+   |
+   = help: Add ';' or a line break before it
+
+
 ✓ test/parser/suite/js/fail/be4fadc2435600d5.js
 error: The operand of an increment or decrement operator must be a variable or a property access
    |
@@ -38642,6 +38690,16 @@ error: A rest element must be last in a destructuring pattern
    |        ^^^^^^^^
    |
    = help: Move the rest element to the end
+
+
+✓ test/parser/suite/js/fail/cdaedc9ae68e43f6.module.js
+error: Expected an identifier, but found '%'
+   |
+ 1 | import %%FILE%% with { type: "json" };
+   |        ^
+ 2 | import %%DEFAULT%% from "x" with { type: "json" };
+   |
+   = help: Identifiers start with a letter, '_', or '$'
 
 
 ✓ test/parser/suite/js/fail/cdb458bf5ab1ff85.module.js
