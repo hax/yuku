@@ -484,12 +484,52 @@ fn isStartOfFunctionOrConstructorType(parser: *Parser) Error!bool {
 
     if (!first.tag.isIdentifierLike()) return false;
 
+    // a modifier run followed by a real parameter start is a function type (tsc's
+    // isUnambiguouslyStartOfFunctionType + skipParameterStart). `(readonly T[])`
+    // and `(readonly [A, B])` are parenthesized readonly array/tuple types — the
+    // parameter start must be followed by `:`, `?`, `,`, `=` or `) =>` to keep the
+    // function-type reading, so the real parse below gates on those.
+    if (functions.isParameterPropertyModifierTag(first.tag)) {
+        peek.end();
+        return isFunctionTypeAfterModifiers(parser);
+    }
+
     return switch (peek.next().tag) {
         .colon, .question, .comma, .assign => true,
         .right_paren => (first.tag == .this or !first.tag.isUnconditionallyReserved()) and
             peek.next().tag == .arrow,
         else => false,
     };
+}
+
+fn isFunctionTypeAfterModifiers(parser: *Parser) Error!bool {
+    const cp = parser.checkpoint();
+    defer parser.rewind(cp);
+
+    try parser.advance() orelse return false;
+    while (functions.isParameterPropertyModifierTag(parser.current_token.tag)) {
+        const next = parser.peekAhead();
+        // a modifier is only a modifier when a parameter start follows on the same
+        // line; otherwise the word itself is the parameter's name (tsc's
+        // skipParameterStart), so let the pattern parse below take it
+        if (next.hasLineTerminatorBefore() or !functions.canStartParameter(next.tag)) break;
+        try parser.advance() orelse return false;
+    }
+
+    // modifier'd rest parameter: the real parameter parse reports it (tsc keeps the
+    // function-type reading here too)
+    if (parser.current_token.tag == .spread) return true;
+
+    _ = try patterns.parseBindingPattern(parser) orelse return false;
+
+    switch (parser.current_token.tag) {
+        .colon, .comma, .question, .assign => return true,
+        .right_paren => {
+            try parser.advance() orelse return false;
+            return parser.current_token.tag == .arrow;
+        },
+        else => return false,
+    }
 }
 
 fn isFunctionTypeAfterPattern(parser: *Parser) Error!bool {

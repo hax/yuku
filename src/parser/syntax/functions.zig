@@ -184,6 +184,17 @@ pub fn parseFormalParameters(
     while (parser.current_token.tag != .right_paren and parser.current_token.tag != .eof) {
         const param_start = parser.current_token.span.start;
 
+        // parameter-property modifiers on a rest parameter: consume them so the rest
+        // parameter still parses, then report against the whole parameter below
+        // (outside constructor implementations; tsc reports TS1317 + TS2369)
+        var rest_modifier_start: ?u32 = null;
+        if (is_ts and !allow_parameter_properties and
+            isParameterPropertyModifierStart(parser) and peekRestAfterModifiers(parser))
+        {
+            rest_modifier_start = parser.current_token.span.start;
+            _ = try parseParameterPropertyModifiers(parser) orelse return null;
+        }
+
         const decorators: ast.IndexRange = if (is_ts and parser.current_token.tag == .at)
             try decorator.parseDecorators(parser) orelse return null
         else
@@ -192,6 +203,17 @@ pub fn parseFormalParameters(
         if (parser.current_token.tag == .spread) {
             rest = try patterns.parseBindingRestElement(parser) orelse .null;
             if (rest != .null) ts.applyDecoratorsToPattern(parser, rest, decorators);
+
+            if (rest_modifier_start) |modifier_start| {
+                if (rest != .null) {
+                    const span: ast.Span = .{
+                        .start = modifier_start,
+                        .end = parser.tree.span(rest).end,
+                    };
+                    try parser.report(span, "A parameter property cannot be declared using a rest parameter", .{});
+                    try parser.report(span, "A parameter property is only allowed in a constructor implementation", .{});
+                }
+            }
 
             if (parser.current_token.tag == .comma and rest != .null) {
                 const span: ast.Span = .{
@@ -261,7 +283,12 @@ fn parseFormalParameter(
 
     if (is_ts and parser.current_token.tag == .this) return parseThisParameter(parser);
 
-    const modifiers = if (is_ts and allow_parameter_properties)
+    // Parameter-property modifiers are recognized in every TS parameter list. Outside
+    // constructor implementations they become a recoverable early error below (tsc
+    // reports TS2369 and keeps checking the parameter) instead of failing the whole
+    // parameter list; the modifier tokens themselves do not join the AST.
+    const modifier_start = parser.current_token.span.start;
+    const modifiers = if (is_ts and isParameterPropertyModifierStart(parser))
         try parseParameterPropertyModifiers(parser) orelse return null
     else
         ParameterPropertyModifiers{};
@@ -292,13 +319,23 @@ fn parseFormalParameter(
     }
 
     if (modifiers.present) {
-        return try parser.tree.addNode(.{ .ts_parameter_property = .{
-            .decorators = decorators,
-            .parameter = pattern,
-            .override = modifiers.override,
-            .readonly = modifiers.readonly,
-            .accessibility = modifiers.accessibility,
-        } }, .{ .start = start, .end = parser.tree.span(pattern).end });
+        if (!allow_parameter_properties) {
+            // tsc checkParameter: TS2369 spans the whole parameter, anchored at the
+            // first modifier token (leading trivia excluded)
+            try parser.report(
+                .{ .start = modifier_start, .end = parser.tree.span(pattern).end },
+                "A parameter property is only allowed in a constructor implementation",
+                .{},
+            );
+        } else {
+            return try parser.tree.addNode(.{ .ts_parameter_property = .{
+                .decorators = decorators,
+                .parameter = pattern,
+                .override = modifiers.override,
+                .readonly = modifiers.readonly,
+                .accessibility = modifiers.accessibility,
+            } }, .{ .start = start, .end = parser.tree.span(pattern).end });
+        }
     }
 
     ts.applyDecoratorsToPattern(parser, pattern, decorators);
@@ -374,14 +411,56 @@ fn parseThisParameter(parser: *Parser) Error!?ast.NodeIndex {
 
 // `constructor(readonly)` names a parameter, not a modifier
 fn isParameterPropertyModifierStart(parser: *Parser) bool {
-    switch (parser.current_token.tag) {
-        .public, .private, .protected, .readonly, .override => {},
-        else => return false,
-    }
+    if (!isParameterPropertyModifierTag(parser.current_token.tag)) return false;
     const next = parser.peekAhead();
     if (next.hasLineTerminatorBefore()) return false;
-    return switch (next.tag) {
-        .left_bracket, .left_brace, .spread => true,
-        else => next.tag.isIdentifierLike(),
+    return canStartParameter(next.tag);
+}
+
+pub fn isParameterPropertyModifierTag(tag: anytype) bool {
+    return switch (tag) {
+        .public, .private, .protected, .readonly, .override => true,
+        else => false,
     };
+}
+
+pub fn canStartParameter(tag: anytype) bool {
+    return switch (tag) {
+        .left_bracket, .left_brace, .spread => true,
+        else => tag.isIdentifierLike(),
+    };
+}
+
+/// Whether a rest parameter follows the modifier run starting at the current
+/// token (`private readonly ...rest`), peeking past the whole run so multi
+/// modifier rests are covered too.
+fn peekRestAfterModifiers(parser: *Parser) bool {
+    var peek = parser.beginPeek();
+    defer peek.end();
+    var token = peek.next();
+    while (isParameterPropertyModifierTag(token.tag)) {
+        const after = peek.next();
+        if (after.hasLineTerminatorBefore() or !canStartParameter(after.tag)) return false;
+        token = after;
+    }
+    return token.tag == .spread;
+}
+
+/// Whether `( <modifier> <name-or-pattern>` begins at the current token. Such a
+/// head can only be an arrow function, never a call, so callers may parse it
+/// committed and let recovery diagnostics survive. `as` after the modifier keeps
+/// the binary-expression reading (tsc does the same, citing #44466); `satisfies`
+/// only commits when a typed or optional parameter keeps it unambiguous.
+pub fn headBeginsWithParameterPropertyModifier(parser: *Parser) bool {
+    if (parser.current_token.tag != .left_paren) return false;
+    var peek = parser.beginPeek();
+    defer peek.end();
+    if (!isParameterPropertyModifierTag(peek.next().tag)) return false;
+    const after = peek.next();
+    if (after.hasLineTerminatorBefore()) return false;
+    if (after.tag == .satisfies) {
+        const third = peek.next();
+        return third.tag == .colon or third.tag == .question;
+    }
+    return after.tag != .as and canStartParameter(after.tag);
 }

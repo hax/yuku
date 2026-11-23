@@ -30,7 +30,22 @@ pub fn classifyArrowHead(parser: *Parser) ArrowHead {
         .this => return if (peek.next().tag == .colon) .yes else .no,
         else => {
             if (!second.tag.isIdentifierLike()) return .no;
-            return switch (peek.next().tag) {
+            const after = peek.next();
+            // a parameter-property modifier followed by a parameter start commits the
+            // arrow head. `as` after a modifier keeps the binary-expression reading
+            // (tsc does the same, parser.ts cites #44466); `satisfies` only commits
+            // when a typed or optional parameter keeps it unambiguous.
+            if (functions.isParameterPropertyModifierTag(second.tag) and
+                !after.hasLineTerminatorBefore())
+            {
+                if (after.tag == .satisfies) {
+                    const third = peek.next();
+                    if (third.tag == .colon or third.tag == .question) return .yes;
+                } else if (after.tag != .as and functions.canStartParameter(after.tag)) {
+                    return .yes;
+                }
+            }
+            return switch (after.tag) {
                 .colon => .yes,
                 .question => switch (peek.next().tag) {
                     .colon, .comma, .assign, .right_paren => .yes,
