@@ -47,30 +47,37 @@ fn parseImportDeclarationImpl(parser: *Parser, start_from_param: ?u32) Error!?as
     }
 
     var phase: ?ast.ImportPhase = null;
+    var misplaced_defer: ?struct { start: u32, named: bool } = null;
     if (import_kind == .value) {
         if (parser.current_token.tag == .source and isPhaseImportBinding(parser, next)) {
             phase = .source;
             try parser.advance() orelse return null;
         } else if (parser.current_token.tag == .@"defer" and
-            (next.tag == .star or isPhaseImportBinding(parser, next)))
+            (next.tag == .star or next.tag == .left_brace or isPhaseImportBinding(parser, next)))
         {
-            if (next.tag != .star) {
-                try parser.report(
-                    parser.current_token.span,
-                    if (next.tag == .left_brace)
-                        "Named imports are not allowed in a deferred import"
-                    else
-                        "Default imports are not allowed in a deferred import",
-                    .{ .help = "Use a namespace import, such as 'import defer * as ns from" ++
-                        " \"m\"'" },
-                );
-            }
+            // `import defer { a } from "m"`: named imports are not allowed in a
+            // deferred import; keep the clause and report the placement (TS18059)
+            // instead of failing the import statement. tsc anchors the whole
+            // `defer <clause>` run, so report after the clause is parsed.
+            if (next.tag != .star) misplaced_defer = .{
+                .start = parser.current_token.span.start,
+                .named = next.tag == .left_brace,
+            };
             phase = .@"defer";
             try parser.advance() orelse return null;
         }
     }
 
     const specifiers = try parseImportClause(parser, import_kind) orelse return null;
+
+    if (misplaced_defer) |misplaced| try parser.report(
+        .{ .start = misplaced.start, .end = parser.prev_token_end },
+        if (misplaced.named)
+            "Named imports are not allowed in a deferred import"
+        else
+            "Default imports are not allowed in a deferred import",
+        .{ .help = "Use a namespace import, such as 'import defer * as ns from \"m\"'" },
+    );
 
     if (!try parser.expect(
         .from,

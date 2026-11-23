@@ -125,3 +125,34 @@ test "legal named tuples stay silent" {
         return error.UnexpectedParseErrors;
     }
 }
+
+// #11: a reserved word as an interface name, and named imports after `defer`,
+// keep their declarations in the tree so the file stays parseable.
+test "a reserved interface name keeps the interface" {
+    var tree = try parseRecovering("interface void {}\ninterface After {}\n");
+    defer tree.deinit();
+    try testing.expectEqual(@as(usize, 2), countTag(&tree, .ts_interface_declaration));
+}
+
+test "named imports after defer keep the import" {
+    var tree = try parseRecovering("import defer { foo } from \"./a\";\nconst after = 1;\n");
+    defer tree.deinit();
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .import_declaration));
+    try expectDiagnosticLooksLike(&tree, "Named imports are not allowed in a deferred import");
+    try testing.expect(countTag(&tree, .binding_identifier) >= 1);
+}
+
+test "legal heritage and imports stay silent" {
+    var tree = try parseRecovering(
+        \\interface Foo {}
+        \\class C extends Object {}
+        \\import defer * as ns from "./a";
+        \\import { named } from "./b";
+        \\
+    );
+    defer tree.deinit();
+    if (tree.hasErrors()) {
+        for (tree.diagnostics.items) |diagnostic| std.debug.print("  {s}\n", .{diagnostic.message});
+        return error.UnexpectedParseErrors;
+    }
+}

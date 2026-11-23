@@ -93,6 +93,20 @@ fn isDeclarationName(token: Token) bool {
         !token.hasLineTerminatorBefore();
 }
 
+/// `interface` followed by a reserved word: tsc parses `interface void {}` and
+/// reports the name from its checker (TS2427), so the declaration still reaches
+/// the tree and the rest of the file stays parseable.
+pub fn isInterfaceWithReservedName(parser: *Parser) bool {
+    if (!parser.tree.isTs()) return false;
+    if (parser.current_token.tag != .interface) return false;
+
+    var peek = parser.beginPeek();
+    defer peek.end();
+
+    const name = peek.next();
+    return name.tag.isUnconditionallyReserved() and !name.hasLineTerminatorBefore();
+}
+
 pub inline fn parseTsDeclaration(parser: *Parser) Error!?ast.NodeIndex {
     return inRegister(parseTsDeclarationImpl, .{parser});
 }
