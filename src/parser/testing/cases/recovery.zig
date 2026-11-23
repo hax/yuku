@@ -89,3 +89,39 @@ test "legal private names stay silent" {
         return error.UnexpectedParseErrors;
     }
 }
+
+// #10: a misplaced `...` or `?` in a labeled tuple element keeps the tuple, its
+// element names and the following type aliases instead of failing the file.
+test "a misplaced tuple rest marker keeps the tuple" {
+    var tree = try parseRecovering("type T = [first: string, rest: ...string[]];\ntype After = number;\n");
+    defer tree.deinit();
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .ts_tuple_type));
+    try testing.expectEqual(@as(usize, 2), countTag(&tree, .ts_named_tuple_member));
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .ts_rest_type));
+    try expectDiagnosticLooksLike(&tree, "declared as rest with a '...' before the name");
+    try testing.expectEqual(@as(usize, 2), countTag(&tree, .ts_type_alias_declaration));
+}
+
+test "a misplaced tuple optional marker keeps the tuple" {
+    var tree = try parseRecovering("type T = [element: string?];\ntype After = number;\n");
+    defer tree.deinit();
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .ts_tuple_type));
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .ts_named_tuple_member));
+    try expectDiagnosticLooksLike(&tree, "declared as optional with a question mark after the name");
+    try testing.expectEqual(@as(usize, 2), countTag(&tree, .ts_type_alias_declaration));
+}
+
+test "legal named tuples stay silent" {
+    var tree = try parseRecovering(
+        \\type A = [length: number, size: number];
+        \\type B = [number, string];
+        \\type C = [...rest: string[]];
+        \\type D = [first: string, second?: number];
+        \\
+    );
+    defer tree.deinit();
+    if (tree.hasErrors()) {
+        for (tree.diagnostics.items) |diagnostic| std.debug.print("  {s}\n", .{diagnostic.message});
+        return error.UnexpectedParseErrors;
+    }
+}

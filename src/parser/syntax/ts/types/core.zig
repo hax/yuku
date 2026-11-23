@@ -828,22 +828,71 @@ fn parseNamedTupleMemberImpl(parser: *Parser) Error!?ast.NodeIndex {
     const start = parser.current_token.span.start;
     const label = try literals.parseIdentifierName(parser) orelse return null;
 
-    const is_optional = parser.current_token.tag == .question;
+    var is_optional = parser.current_token.tag == .question;
     if (is_optional) try parser.advance() orelse return null;
 
     if (!try parser.expect(.colon, "Expected ':' after the tuple element name", null)) {
         return null;
     }
 
+    // `[rest: ...string[]]` — tsc parses the element type and reports TS5087 while
+    // keeping the member as a rest element (yuku#10).
+    const misplaced_rest = parser.current_token.tag == .spread;
+    const rest_span = parser.current_token.span;
+    if (misplaced_rest) try parser.advance() orelse return null;
+
     const element_type = try parseType(parser) orelse return null;
 
-    return try parser.tree.addNode(
+    // `[element: string?]` — the postfix `?` parses as a JSDoc nullable type. The
+    // question mark belongs before the colon; keep the element optional and report
+    // TS5086 over the whole element type instead of failing the tuple (yuku#10).
+    // The nullable node stays the element type so tsc-side JSDoc rules keep seeing
+    // it as a tuple member and do not double-report TS17019.
+    if (parser.tree.data(element_type) == .ts_jsdoc_nullable_type and
+        parser.tree.data(element_type).ts_jsdoc_nullable_type.postfix)
+    {
+        const nullable_span = parser.tree.span(element_type);
+        if (!misplaced_rest) {
+            try parser.report(nullable_span, "A labeled tuple element is declared as optional with a question mark after" ++
+                " the name and before the colon, rather than after the type", .{
+                .help = "Move the '?' before the ':' (b?: T)",
+            });
+        }
+        is_optional = true;
+    }
+
+    // `[element: string?]` written with the `?` after the colon.
+    if (parser.current_token.tag == .question) {
+        try parser.report(
+            .{ .start = parser.current_token.span.start, .end = parser.current_token.span.end },
+            "A labeled tuple element is declared as optional with a question mark after the name" ++
+                " and before the colon, rather than after the type",
+            .{ .help = "Move the '?' before the ':' (b?: T)" },
+        );
+        try parser.advance() orelse return null;
+        is_optional = true;
+    } else if (misplaced_rest) {
+        try parser.report(
+            .{ .start = rest_span.start, .end = parser.tree.span(element_type).end },
+            "A labeled tuple element is declared as rest with a '...' before the name, rather" ++
+                " than before the type",
+            .{ .help = "Move the '...' before the name (...rest: T[])" },
+        );
+    }
+
+    const end = parser.tree.span(element_type).end;
+    const member = try parser.tree.addNode(
         .{ .ts_named_tuple_member = .{
             .label = label,
             .element_type = element_type,
             .optional = is_optional,
         } },
-        .{ .start = start, .end = parser.tree.span(element_type).end },
+        .{ .start = start, .end = end },
+    );
+    if (!misplaced_rest) return member;
+    return try parser.tree.addNode(
+        .{ .ts_rest_type = .{ .type_annotation = member } },
+        .{ .start = start, .end = end },
     );
 }
 
