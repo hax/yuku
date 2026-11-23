@@ -33,9 +33,23 @@ pub fn parseCover(parser: *Parser) Error!?ObjectCover {
     var end = start + 1;
 
     while (parser.current_token.tag != .right_brace and parser.current_token.tag != .eof) {
-        const property = if (parser.current_token.tag == .spread)
-            try expressions.parseSpreadElement(parser) orelse return null
-        else
+        const property = if (parser.current_token.tag == .spread) blk: {
+            const spread = try expressions.parseSpreadElement(parser) orelse return null;
+            // `{ ...a: b }` — a rest element cannot have a property name. Keep the
+            // rest, consume the misplaced name and report it at the name, so the
+            // object (and whatever follows) still parses (TS2566).
+            if (parser.current_token.tag == .colon) {
+                try parser.advance() orelse return null;
+                const value = try expressions.parseExpression(parser, Precedence.Assignment, .{}) orelse
+                    return null;
+                try parser.report(
+                    parser.tree.span(value),
+                    "A rest element cannot have a property name",
+                    .{ .help = "Remove the name after the rest element" },
+                );
+            }
+            break :blk spread;
+        } else
             try parseCoverProperty(parser) orelse return null;
         try parser.scratch_cover.append(parser.allocator(), property);
         end = parser.tree.span(property).end;

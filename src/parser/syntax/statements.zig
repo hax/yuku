@@ -80,7 +80,24 @@ fn parseStatementImpl(parser: *Parser, options: ParseStatementOptions) Error!?as
         .@"return" => parseReturnStatement(parser),
         .throw => parseThrowStatement(parser),
         .@"try" => parseTryStatement(parser),
-        .left_brace => parseBlockStatement(parser),
+        .left_brace => blk: {
+            const block = try parseBlockStatement(parser) orelse break :blk null;
+            // `{ a, b } = value;` — tsc reports TS2809 on the '=' and keeps parsing;
+            // consume the assignment so the statement and the rest of the file survive.
+            if (parser.current_token.tag == .assign) {
+                try parser.report(
+                    parser.current_token.span,
+                    "Declaration or statement expected. This '=' follows a block of statements, so" ++
+                        " if you intended to write a destructuring assignment, you might need to" ++
+                        " wrap the whole assignment in parentheses",
+                    .{ .help = "Wrap the assignment in parentheses: '({ a, b } = value)'" },
+                );
+                try parser.advance() orelse break :blk block;
+                _ = try expressions.parseExpression(parser, Precedence.Assignment, .{}) orelse break :blk block;
+                _ = try parser.eatSemicolon(parser.prev_token_end) orelse break :blk block;
+            }
+            break :blk block;
+        },
         .debugger => parseDebuggerStatement(parser),
         .semicolon => parseEmptyStatement(parser),
         else => parseExpressionOrLabeledStatementOrDirective(parser),

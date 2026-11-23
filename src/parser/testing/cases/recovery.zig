@@ -156,3 +156,51 @@ test "legal heritage and imports stay silent" {
         return error.UnexpectedParseErrors;
     }
 }
+
+// #11: a heritage expression, an object rest property name and a statement-level
+// destructuring assignment keep their declarations and the statements after them.
+test "a heritage call or optional chain keeps the declaration" {
+    var tree = try parseRecovering(
+        \\interface A extends color() {}
+        \\class C implements ns?.B {}
+        \\interface D extends (typeof C) {}
+        \\interface After {}
+        \\
+    );
+    defer tree.deinit();
+    try testing.expect(countTag(&tree, .ts_interface_declaration) >= 3);
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .class));
+    try testing.expect(countTag(&tree, .member_expression) >= 1); // `ns?.B` kept
+    try expectDiagnosticLooksLike(&tree, "An interface can only extend an identifier/qualified-name");
+}
+
+test "an object rest property name keeps the object" {
+    var tree = try parseRecovering("const { ...a: b } = {};\nconst after = 1;\n");
+    defer tree.deinit();
+    try testing.expectEqual(@as(usize, 1), countTag(&tree, .object_pattern));
+    try expectDiagnosticLooksLike(&tree, "A rest element cannot have a property name");
+    try testing.expect(countTag(&tree, .binding_identifier) >= 1);
+}
+
+test "a statement-level destructuring assignment keeps the statements after it" {
+    var tree = try parseRecovering("let a: number, b: number;\n{ a, b } = fn();\nconst after = 1;\n");
+    defer tree.deinit();
+    try expectDiagnosticLooksLike(&tree, "This '=' follows a block of statements");
+    try testing.expect(countTag(&tree, .variable_declaration) >= 2);
+}
+
+test "legal heritage and destructuring stay silent" {
+    var tree = try parseRecovering(
+        \\namespace ns { export class B {} }
+        \\interface I extends ns.B {}
+        \\class C extends ns.B implements I {}
+        \\const { a, ...rest } = { a: 1 };
+        \\({ a } = { a: 1 });
+        \\
+    );
+    defer tree.deinit();
+    if (tree.hasErrors()) {
+        for (tree.diagnostics.items) |diagnostic| std.debug.print("  {s}\n", .{diagnostic.message});
+        return error.UnexpectedParseErrors;
+    }
+}

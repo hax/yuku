@@ -337,7 +337,38 @@ pub fn parseHeritageClause(
     defer parser.scratch_a.reset(checkpoint);
 
     while (true) {
-        const expression = try parseHeritageExpression(parser) orelse return null;
+        var misplaced = false;
+        var expression = try parseHeritageExpression(parser, &misplaced) orelse return null;
+        const expression_start = parser.tree.span(expression).start;
+        // tsc parses a full expression here and reports TS2499/TS2500 from its
+        // checker. An optional chain and a call used to leave the clause
+        // half-parsed and kill the body; consume them and report over the span.
+        while (parser.current_token.tag == .optional_chaining) {
+            try parser.advance() orelse return null;
+            const property = try literals.parseIdentifierName(parser) orelse return null;
+            expression = try parser.tree.addNode(
+                .{ .member_expression = .{
+                    .object = expression,
+                    .property = property,
+                    .computed = false,
+                    .optional = true,
+                } },
+                .{ .start = expression_start, .end = parser.tree.span(property).end },
+            );
+            misplaced = true;
+        }
+        if (parser.current_token.tag == .left_paren) {
+            try skipParenthesized(parser);
+            misplaced = true;
+        }
+        if (misplaced) try parser.report(
+            .{ .start = expression_start, .end = parser.prev_token_end },
+            if (tag == .ts_interface_heritage)
+                "An interface can only extend an identifier/qualified-name with optional type arguments"
+            else
+                "A class can only implement an identifier/qualified-name with optional type arguments",
+            .{ .help = "Use a plain name, optionally qualified and with type arguments" },
+        );
         const type_arguments = try types.parseTypeArguments(parser);
         const expression_span = parser.tree.span(expression);
         const end = if (type_arguments != .null)
@@ -357,11 +388,34 @@ pub fn parseHeritageClause(
     return try parser.flushToExtras(&parser.scratch_a, checkpoint);
 }
 
-inline fn parseHeritageExpression(parser: *Parser) Error!?ast.NodeIndex {
-    return inRegister(parseHeritageExpressionImpl, .{parser});
+/// Consumes a parenthesized run (recovery for `extends color()`): the clause only
+/// needs to keep the heritage entry and move past the call.
+fn skipParenthesized(parser: *Parser) Error!void {
+    std.debug.assert(parser.current_token.tag == .left_paren);
+    var depth: usize = 0;
+    while (true) {
+        switch (parser.current_token.tag) {
+            .eof => return,
+            .left_paren => depth += 1,
+            .right_paren => depth -= 1,
+            else => {},
+        }
+        try parser.advance() orelse return;
+        if (depth == 0) return;
+    }
 }
 
-fn parseHeritageExpressionImpl(parser: *Parser) Error!?ast.NodeIndex {
+inline fn parseHeritageExpression(parser: *Parser, misplaced: *bool) Error!?ast.NodeIndex {
+    return inRegister(parseHeritageExpressionImpl, .{ parser, misplaced });
+}
+
+fn parseHeritageExpressionImpl(parser: *Parser, misplaced: *bool) Error!?ast.NodeIndex {
+    if (parser.current_token.tag == .left_paren) {
+        // `extends (typeof A)`: parse the parenthesized expression; the caller
+        // reports the placement (TS2499).
+        misplaced.* = true;
+        return try expressions.parseExpression(parser, Precedence.Assignment, .{});
+    }
     var expression = if (parser.current_token.tag == .this) blk: {
         const span = parser.current_token.span;
         try parser.advance() orelse return null;
