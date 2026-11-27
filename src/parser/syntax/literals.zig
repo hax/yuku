@@ -334,6 +334,20 @@ pub inline fn parsePrivateIdentifier(parser: *Parser) Error!?ast.NodeIndex {
     }, token.span);
 }
 
+/// `await` kept as a plain identifier in a position where tsc's parser also keeps
+/// it, without the reserved-word diagnostic: tsc leaves that complaint to the
+/// binder (TS1262 at the top level of a module) or to name resolution (TS2304 in a
+/// script), and the surrounding construct has to stay in the tree either way.
+pub inline fn parseAwaitAsIdentifierReference(parser: *Parser) Error!?ast.NodeIndex {
+    std.debug.assert(parser.current_token.tag == .await);
+    const token = parser.current_token;
+    try parser.advanceWithoutEscapeCheck() orelse return null;
+
+    return try parser.tree.addNode(.{
+        .identifier_reference = .{ .name = try parser.identifierName(token) },
+    }, token.span);
+}
+
 pub inline fn parseIdentifierName(parser: *Parser) Error!?ast.NodeIndex {
     return inRegister(parseIdentifierNameImpl, .{parser});
 }

@@ -8,4 +8,5 @@ test {
     _ = @import("cases/comments.zig");
     _ = @import("cases/codegen.zig");
     _ = @import("cases/recovery.zig");
+    _ = @import("cases/await_identifier.zig");
 }

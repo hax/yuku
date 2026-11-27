@@ -275,8 +275,20 @@ pub fn parsePropertyKey(
         try parser.advance() orelse return null;
         // a key is never a pattern, so its strips must not replace the pattern's record
         const outer_stripped_paren = parser.state.stripped_paren;
-        const key = try expressions.parseExpression(parser, Precedence.Assignment, .{}) orelse
-            return null;
+        // `[await]` with no operand: tsc's parser keeps `await` as an identifier and
+        // leaves the complaint to the binder (TS1262 at the top level of a module) or
+        // to name resolution (TS2304 in a script), so the object literal, the key and
+        // the statements after it all stay in the tree. Only the operand-less form is
+        // recovered; `[await x]` is still an await expression, and a type member key
+        // (owner == .signature) has no expression form to recover into.
+        const await_identifier_key = owner != .signature and
+            parser.current_token.tag == .await and
+            parser.context.await and
+            parser.peekAhead().tag == .right_bracket;
+        const key = if (await_identifier_key)
+            try literals.parseAwaitAsIdentifierReference(parser) orelse return null
+        else
+            try expressions.parseExpression(parser, Precedence.Assignment, .{}) orelse return null;
         if (owner == .object) parser.state.stripped_paren = outer_stripped_paren;
         if (!try parser.expect(
             .right_bracket,
