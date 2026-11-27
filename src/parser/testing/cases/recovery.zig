@@ -126,14 +126,8 @@ test "legal named tuples stay silent" {
     }
 }
 
-// #11: a reserved word as an interface name, and named imports after `defer`,
-// keep their declarations in the tree so the file stays parseable.
-test "a reserved interface name keeps the interface" {
-    var tree = try parseRecovering("interface void {}\ninterface After {}\n");
-    defer tree.deinit();
-    try testing.expectEqual(@as(usize, 2), countTag(&tree, .ts_interface_declaration));
-}
-
+// #11: named imports after `defer` keep their declaration in the tree so the file
+// stays parseable.
 test "named imports after defer keep the import" {
     var tree = try parseRecovering("import defer { foo } from \"./a\";\nconst after = 1;\n");
     defer tree.deinit();

@@ -311,7 +311,6 @@ inline fn parseTsDeclarationOrExpression(parser: *Parser) Error!?ast.NodeIndex {
 
 fn parseTsDeclarationOrExpressionImpl(parser: *Parser) Error!?ast.NodeIndex {
     if (ts_decl.isStartOfTsDeclaration(parser)) return ts_decl.parseTsDeclaration(parser);
-    if (ts_decl.isInterfaceWithReservedName(parser)) return ts_decl.parseTsDeclaration(parser);
     return parseExpressionOrLabeledStatementOrDirective(parser);
 }
 
